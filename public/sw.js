@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bk-packages-erp-v1';
+const CACHE_NAME = 'bk-packages-erp-v2';
 
 const APP_SHELL_URLS = [
   '/',
@@ -11,7 +11,8 @@ const APP_SHELL_URLS = [
   '/reports',
   '/manifest.json',
   '/icons/icon.svg',
-  '/js/offline-sync.js'
+  '/js/offline-sync.js',
+  '/js/ai-copilot.js'
 ];
 
 // Install: Pre-cache core app shell

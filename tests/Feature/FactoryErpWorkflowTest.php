@@ -9,8 +9,10 @@ use App\Models\PaperReel;
 use App\Models\Party;
 use App\Models\User;
 use App\Models\Worker;
+use App\Services\FactoryAiCopilotService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class FactoryErpWorkflowTest extends TestCase
@@ -285,5 +287,149 @@ class FactoryErpWorkflowTest extends TestCase
         $this->get("/production/conversion/{$run->id}/report")
             ->assertStatus(200)
             ->assertSee($run->run_code);
+    }
+
+    public function test_ai_copilot_chat_returns_reply_and_action_card(): void
+    {
+        $this->actingAs($this->accountant);
+
+        if (empty(env('GEMINI_API_KEY')) && empty(env('GEMINI_API_KEYS'))) {
+            putenv('GEMINI_API_KEY=test-mock-key');
+            $_ENV['GEMINI_API_KEY'] = 'test-mock-key';
+            $_SERVER['GEMINI_API_KEY'] = 'test-mock-key';
+        }
+
+        $party = Party::where('type', 'CUSTOMER')->firstOrFail();
+
+        $mockModelJson = json_encode([
+            'reply' => "Maine {$party->name} ki Rs. 50,000 cash receipt tayyar kar di hai.",
+            'pending_action' => [
+                'title' => 'Record Cash Receipt',
+                'summary_lines' => [
+                    "Party: {$party->name}",
+                    'Amount: Rs. 50,000',
+                    'Mode: CASH',
+                ],
+                'target_path' => '/khata/voucher',
+                'payload' => [
+                    'voucher_type' => 'RECEIPT_VOUCHER',
+                    'party_id' => $party->id,
+                    'total_amount' => 50000,
+                    'payment_mode' => 'CASH',
+                    'description' => 'AI prepared cash receipt',
+                ],
+            ],
+        ]);
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => $mockModelJson],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/ai-copilot/chat', [
+            'message' => "{$party->name} se 50000 cash mila",
+            'history' => [],
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['reply', 'pending_action', 'model'])
+            ->assertJsonPath('pending_action.target_path', '/khata/voucher')
+            ->assertJsonPath('pending_action.payload.total_amount', 50000);
+    }
+
+    public function test_ai_copilot_execute_records_voucher_and_updates_khata(): void
+    {
+        $this->actingAs($this->accountant);
+
+        $party = Party::where('type', 'CUSTOMER')->firstOrFail();
+        $initialBalance = (float) $party->current_balance;
+
+        $response = $this->postJson('/ai-copilot/execute', [
+            'target_path' => '/khata/voucher',
+            'payload' => [
+                'voucher_type' => 'RECEIPT_VOUCHER',
+                'party_id' => $party->id,
+                'total_amount' => 30000,
+                'payment_mode' => 'CASH',
+                'description' => 'AI verified cash receipt',
+            ],
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['status' => 'executed']);
+
+        $this->assertEquals($initialBalance - 30000, (float) $party->fresh()->current_balance);
+    }
+
+    public function test_ai_copilot_enforces_gate_operator_role_restrictions(): void
+    {
+        $snapshot = FactoryAiCopilotService::getSnapshotForUser($this->gateOperator);
+
+        $this->assertArrayNotHasKey('financial_summary', $snapshot);
+        $this->assertArrayNotHasKey('raw_materials', $snapshot);
+        $this->assertArrayNotHasKey('recent_vouchers', $snapshot);
+        $this->assertArrayNotHasKey('workers', $snapshot);
+        foreach ($snapshot['parties'] as $partyRow) {
+            $this->assertArrayNotHasKey('current_balance', $partyRow);
+        }
+
+        $this->actingAs($this->gateOperator);
+
+        if (empty(env('GEMINI_API_KEY')) && empty(env('GEMINI_API_KEYS'))) {
+            putenv('GEMINI_API_KEY=test-mock-key');
+            $_ENV['GEMINI_API_KEY'] = 'test-mock-key';
+            $_SERVER['GEMINI_API_KEY'] = 'test-mock-key';
+        }
+
+        $party = Party::where('type', 'CUSTOMER')->firstOrFail();
+        $mockBlockedAction = json_encode([
+            'reply' => 'Financial action cannot be performed by Gate Security.',
+            'pending_action' => [
+                'title' => 'Unauthorized Receipt',
+                'summary_lines' => ['Blocked'],
+                'target_path' => '/khata/voucher',
+                'payload' => [
+                    'voucher_type' => 'RECEIPT_VOUCHER',
+                    'party_id' => $party->id,
+                    'total_amount' => 1000,
+                    'payment_mode' => 'CASH',
+                    'description' => 'Should be stripped',
+                ],
+            ],
+        ]);
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => $mockBlockedAction]]],
+                ]],
+            ], 200),
+        ]);
+
+        $this->postJson('/ai-copilot/chat', [
+            'message' => 'Ahmed Ghee se cash likho',
+        ])->assertStatus(200)
+            ->assertJsonPath('pending_action', null);
+
+        $this->postJson('/ai-copilot/execute', [
+            'target_path' => '/khata/voucher',
+            'payload' => [
+                'voucher_type' => 'RECEIPT_VOUCHER',
+                'party_id' => $party->id,
+                'total_amount' => 5000,
+                'payment_mode' => 'CASH',
+                'description' => 'Unauthorized attempt',
+            ],
+        ])->assertStatus(403)
+            ->assertJson(['status' => 'forbidden']);
     }
 }

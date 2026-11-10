@@ -162,6 +162,12 @@
             </div>
 
             <div class="flex items-center gap-3">
+                <button onclick="window.BKAiCopilot?.toggle()"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-colors cursor-pointer"
+                        title="Open AI Factory Assistant">
+                    <span class="material-symbols-outlined text-[16px]">auto_awesome</span>
+                    <span>AI Assistant</span>
+                </button>
                 <button id="network-status-pill" onclick="openModal('modal-sync-queue')"
                         class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer"
                         title="Click to inspect offline sync queue">
@@ -239,8 +245,80 @@
         </div>
     </div>
 
+    <!-- Right Side AI Copilot Drawer -->
+    <div id="ai-backdrop" onclick="window.BKAiCopilot?.toggle()" class="fixed inset-0 bg-slate-900/40 z-50 hidden no-print"></div>
+    <aside id="ai-drawer" class="fixed top-0 right-0 h-screen w-full sm:w-[420px] bg-slate-50 border-l border-slate-200 z-50 flex flex-col transform translate-x-full transition-transform duration-200 shadow-2xl no-print">
+        <!-- Drawer Header -->
+        <div class="px-5 py-4 bg-navy-900 text-white flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+                </div>
+                <div>
+                    <div class="text-sm font-semibold">BK Packages AI Assistant</div>
+                    <div class="text-[11px] text-slate-400">English & Roman Urdu · Live Factory Data</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-1">
+                <button onclick="window.BKAiCopilot?.clearChat()" title="New Chat" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+                    <span class="material-symbols-outlined text-[18px]">refresh</span>
+                </button>
+                <button onclick="window.BKAiCopilot?.toggle()" title="Close" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+                    <span class="material-symbols-outlined text-[18px]">close</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div id="ai-messages" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <div id="ai-welcome-box" class="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+                <div class="text-sm font-semibold text-slate-900">Assalam-o-Alaikum, {{ auth()->user()?->name ?? 'Mirza Sohail' }}!</div>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Ask me anything in <strong>English</strong> or <strong>Roman Urdu</strong>. I can check live balances, paper stock, trucks, guide you on how to use any page, or prepare entries for your confirmation.
+                </p>
+                <div class="pt-2 space-y-2">
+                    <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Try asking:</div>
+                    @if(auth()->user()?->isFinancialAuthorized())
+                        <button type="button" onclick="window.BKAiCopilot.askQuick('Ahmed Oil & Ghee ka kitna baqaya hai?')"
+                                class="w-full text-left px-3 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 text-xs text-slate-700 transition-colors">
+                            "Ahmed Oil & Ghee ka kitna baqaya hai?"
+                        </button>
+                        <button type="button" onclick="window.BKAiCopilot.askQuick('Show me today\'s cash, paper reels & carton stock summary')"
+                                class="w-full text-left px-3 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 text-xs text-slate-700 transition-colors">
+                            "Today's cash, paper reels & carton stock summary"
+                        </button>
+                        <button type="button" onclick="window.BKAiCopilot.askQuick('Record Rs. 50,000 cash received from Irfan Pharma Okara')"
+                                class="w-full text-left px-3 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 text-xs text-slate-700 transition-colors">
+                            "Record Rs. 50,000 cash received from Irfan Pharma"
+                        </button>
+                    @else
+                        <button type="button" onclick="window.BKAiCopilot.askQuick('Show all trucks currently in the factory yard')"
+                                class="w-full text-left px-3 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 text-xs text-slate-700 transition-colors">
+                            "Show trucks currently in the factory yard"
+                        </button>
+                        <button type="button" onclick="window.BKAiCopilot.askQuick('How do I weigh a truck and print a gate pass?')"
+                                class="w-full text-left px-3 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 text-xs text-slate-700 transition-colors">
+                            "How do I weigh a truck and print a gate pass?"
+                        </button>
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Input Bar -->
+        <form id="ai-chat-form" data-no-offline class="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0">
+            <input id="ai-input" type="text" autocomplete="off"
+                   placeholder="Ask or tell AI what to add..."
+                   class="flex-1 rounded-xl border-slate-300 text-sm py-2.5 focus:border-blue-600 focus:ring-blue-600" />
+            <button type="submit" class="px-4 py-2.5 rounded-xl bg-navy-900 text-white text-sm font-medium hover:bg-navy-800 flex items-center justify-center">
+                <span class="material-symbols-outlined text-[18px]">send</span>
+            </button>
+        </form>
+    </aside>
+
     <script src="https://unpkg.com/dexie@4/dist/dexie.js"></script>
     <script src="/js/offline-sync.js"></script>
+    <script src="/js/ai-copilot.js"></script>
     <script>
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');

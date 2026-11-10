@@ -39,6 +39,7 @@
     "LOG_CHANNEL": "stderr",
     "SESSION_DRIVER": "database",
     "DB_CONNECTION": "pgsql",
-    "DB_SSLMODE": "require"
+    "DB_SSLMODE": "require",
+    "GEMINI_MODEL": "gemini-3.5-flash-lite"
   }
 }

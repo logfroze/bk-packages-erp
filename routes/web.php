@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AiCopilotController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ConversionController;
@@ -30,6 +31,10 @@ Route::middleware('auth')->group(function () {
     // Phase 4: Offline PWA Sync API
     Route::get('/offline-sync/ping', [OfflineSyncController::class, 'ping'])->name('offline.ping');
     Route::post('/offline-sync/replay', [OfflineSyncController::class, 'replay'])->name('offline.replay');
+
+    // Phase 6: Built-in Google AI Studio Factory Assistant
+    Route::post('/ai-copilot/chat', [AiCopilotController::class, 'chat'])->name('ai.chat');
+    Route::post('/ai-copilot/execute', [AiCopilotController::class, 'execute'])->name('ai.execute');
 
     // Restricted to Accountant & Admin (Director)
     Route::middleware('role:ADMIN,ACCOUNTANT')->group(function () {
