@@ -39,7 +39,7 @@ class FactoryErpWorkflowTest extends TestCase
     {
         $this->post('/login', [
             'email' => 'sohail@bkpackages.com',
-            'password' => 'password',
+            'password' => 'BkPkg#Sohail2026!',
         ])->assertRedirect('/');
 
         $this->assertAuthenticatedAs($this->accountant);

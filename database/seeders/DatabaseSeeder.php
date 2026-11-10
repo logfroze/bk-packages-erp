@@ -29,7 +29,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Mirza Sohail',
                 'role' => 'ACCOUNTANT',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('BkPkg#Sohail2026!'),
             ]
         );
 
@@ -38,7 +38,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Manzoor Ali (Director)',
                 'role' => 'ADMIN',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('BkPkg#Manzoor2026!'),
             ]
         );
 
@@ -47,7 +47,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Subedar Nazir Ahmed',
                 'role' => 'GATE_OPERATOR',
-                'password' => Hash::make('password'),
+                'password' => Hash::make('BkPkg#Gate2026!'),
             ]
         );
 

@@ -78,12 +78,12 @@
             <div class="mt-6 pt-5 border-t border-slate-100">
                 <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5 text-center">Staff Quick-Fill (Testing)</p>
                 <div class="grid grid-cols-2 gap-2">
-                    <button type="button" onclick="fillLogin('sohail@bkpackages.com', 'password')"
+                    <button type="button" onclick="fillLogin('sohail@bkpackages.com', 'BkPkg#Sohail2026!')"
                             class="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-left">
                         <div class="text-xs font-semibold text-slate-800">Mirza Sohail</div>
                         <div class="text-[10px] text-slate-500">Accountant (Full)</div>
                     </button>
-                    <button type="button" onclick="fillLogin('gate@bkpackages.com', 'password')"
+                    <button type="button" onclick="fillLogin('gate@bkpackages.com', 'BkPkg#Gate2026!')"
                             class="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-left">
                         <div class="text-xs font-semibold text-slate-800">Subedar Nazir</div>
                         <div class="text-[10px] text-slate-500">Gate Security Only</div>
