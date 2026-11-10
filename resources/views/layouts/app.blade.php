@@ -215,7 +215,7 @@
                 <button id="ai-toggle-btn" onclick="window.BKAiCopilot?.toggle()"
                         class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-colors cursor-pointer"
                         title="Toggle AI Factory Assistant side panel">
-                    <span class="material-symbols-outlined text-[16px]">auto_awesome</span>
+                    <!-- <span class="material-symbols-outlined text-[16px]">auto_awesome</span> -->
                     <span>AI Assistant</span>
                 </button>
                 <button id="network-status-pill" onclick="openModal('modal-sync-queue')"
@@ -303,9 +303,9 @@
         <!-- Drawer Header -->
         <div class="px-4 py-3.5 bg-navy-900 text-white flex items-center justify-between gap-2 shrink-0">
             <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                <!-- <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
                     <span class="material-symbols-outlined text-[18px]">auto_awesome</span>
-                </div>
+                </div> -->
                 <div class="min-w-0">
                     <div class="text-sm font-semibold truncate">BK Packages AI</div>
                     <div id="ai-header-subtitle" class="text-[11px] text-slate-400 truncate">Side-by-Side · Live Data</div>
