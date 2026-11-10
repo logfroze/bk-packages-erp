@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+!.env.example
+!.env.postgresql.example
+/vendor
+/node_modules
+database/*.sqlite
+database/*.sqlite-journal
+storage/logs/*.log
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/cache/data/*
+tests
+.phpunit.cache

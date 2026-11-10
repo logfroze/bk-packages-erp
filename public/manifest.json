@@ -1,0 +1,19 @@
+{
+  "name": "BK Packages — Factory Management ERP",
+  "short_name": "BK Packages",
+  "description": "Factory operations, gate pass, production, stock, khata & payroll ERP for BK Packages Okara.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0F172A",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

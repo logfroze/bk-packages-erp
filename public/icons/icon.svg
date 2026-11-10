@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0F172A"/>
+  <rect x="64" y="64" width="384" height="384" rx="64" fill="#1E293B"/>
+  <path d="M256 112L384 184V328L256 400L128 328V184L256 112Z" fill="#2563EB" stroke="#FFFFFF" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M256 112V400M128 184L256 256L384 184" stroke="#FFFFFF" stroke-width="12" stroke-linejoin="round"/>
+  <text x="256" y="310" font-family="Inter, Arial, sans-serif" font-weight="800" font-size="88" fill="#FFFFFF" text-anchor="middle" opacity="0.95">BK</text>
+</svg>
+
