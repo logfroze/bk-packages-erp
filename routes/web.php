@@ -33,6 +33,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/offline-sync/replay', [OfflineSyncController::class, 'replay'])->name('offline.replay');
 
     // Phase 6: Built-in Google AI Studio Factory Assistant
+    Route::get('/ai-copilot/conversations', [AiCopilotController::class, 'conversations'])->name('ai.conversations.index');
+    Route::get('/ai-copilot/conversations/{conversation}', [AiCopilotController::class, 'showConversation'])->name('ai.conversations.show');
+    Route::delete('/ai-copilot/conversations/{conversation}', [AiCopilotController::class, 'destroyConversation'])->name('ai.conversations.destroy');
+    Route::post('/ai-copilot/messages/{message}/dismiss', [AiCopilotController::class, 'dismissAction'])->name('ai.messages.dismiss');
     Route::post('/ai-copilot/chat', [AiCopilotController::class, 'chat'])->name('ai.chat');
     Route::post('/ai-copilot/execute', [AiCopilotController::class, 'execute'])->name('ai.execute');
 

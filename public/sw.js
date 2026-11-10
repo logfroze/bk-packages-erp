@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bk-packages-erp-v2';
+const CACHE_NAME = 'bk-packages-erp-v3';
 
 const APP_SHELL_URLS = [
   '/',

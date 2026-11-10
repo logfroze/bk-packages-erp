@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiConversation;
+use App\Models\AiMessage;
 use App\Models\CartonProduct;
 use App\Models\ConversionRun;
 use App\Models\GateRegister;
@@ -431,5 +433,118 @@ class FactoryErpWorkflowTest extends TestCase
             ],
         ])->assertStatus(403)
             ->assertJson(['status' => 'forbidden']);
+    }
+
+    public function test_ai_side_by_side_layout_and_history_ui_render_cleanly(): void
+    {
+        $this->actingAs($this->accountant);
+
+        $this->get('/')
+            ->assertStatus(200)
+            ->assertSee('id="workspace-shell"', false)
+            ->assertSee('ai-dock-open', false)
+            ->assertSee('id="ai-history-panel"', false)
+            ->assertSee('id="ai-history-list"', false);
+    }
+
+    public function test_ai_conversation_history_persists_and_enforces_user_isolation(): void
+    {
+        $this->actingAs($this->accountant);
+
+        if (empty(env('GEMINI_API_KEY')) && empty(env('GEMINI_API_KEYS'))) {
+            putenv('GEMINI_API_KEY=test-mock-key');
+            $_ENV['GEMINI_API_KEY'] = 'test-mock-key';
+            $_SERVER['GEMINI_API_KEY'] = 'test-mock-key';
+        }
+
+        $party = Party::where('type', 'CUSTOMER')->firstOrFail();
+
+        $turn1Json = json_encode([
+            'reply' => 'Check balance reply.',
+            'pending_action' => null,
+        ]);
+
+        $turn2Json = json_encode([
+            'reply' => 'Prepared Rs. 15,000 receipt.',
+            'pending_action' => [
+                'title' => 'Record Cash Receipt',
+                'summary_lines' => ['Amount: Rs. 15,000'],
+                'target_path' => '/khata/voucher',
+                'payload' => [
+                    'voucher_type' => 'RECEIPT_VOUCHER',
+                    'party_id' => $party->id,
+                    'total_amount' => 15000,
+                    'payment_mode' => 'CASH',
+                    'description' => 'AI follow-up receipt',
+                ],
+            ],
+        ]);
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push(['candidates' => [['content' => ['parts' => [['text' => $turn1Json]]]]]], 200)
+                ->push(['candidates' => [['content' => ['parts' => [['text' => $turn2Json]]]]]], 200),
+        ]);
+
+        // Turn 1: creates new conversation in DB
+        $res1 = $this->postJson('/ai-copilot/chat', [
+            'message' => 'Ahmed Oil balance check',
+        ])->assertStatus(200);
+
+        $convId = $res1->json('conversation_id');
+        $this->assertNotNull($convId);
+
+        // Turn 2: continues same conversation
+        $res2 = $this->postJson('/ai-copilot/chat', [
+            'conversation_id' => $convId,
+            'message' => 'Record 15000 cash receipt',
+        ])->assertStatus(200);
+
+        $modelMsgId = $res2->json('model_message_id');
+        $this->assertEquals($convId, $res2->json('conversation_id'));
+        $this->assertEquals(4, AiMessage::where('conversation_id', $convId)->count());
+
+        // Executing marks model message action_status = executed
+        $this->postJson('/ai-copilot/execute', [
+            'target_path' => '/khata/voucher',
+            'payload' => [
+                'voucher_type' => 'RECEIPT_VOUCHER',
+                'party_id' => $party->id,
+                'total_amount' => 15000,
+                'payment_mode' => 'CASH',
+                'description' => 'AI follow-up receipt',
+            ],
+            'message_id' => $modelMsgId,
+        ])->assertStatus(200)->assertJson(['status' => 'executed']);
+
+        $this->assertEquals('executed', AiMessage::findOrFail($modelMsgId)->action_status);
+
+        // History index & detail return saved conversation
+        $this->getJson('/ai-copilot/conversations')
+            ->assertStatus(200)
+            ->assertJsonFragment(['id' => $convId, 'messages_count' => 4]);
+
+        $this->getJson("/ai-copilot/conversations/{$convId}")
+            ->assertStatus(200)
+            ->assertJsonFragment(['id' => $modelMsgId, 'action_status' => 'executed']);
+
+        // Gate Operator CANNOT view, append to, dismiss, or delete Accountant's conversation
+        $this->actingAs($this->gateOperator);
+        $this->getJson("/ai-copilot/conversations/{$convId}")->assertStatus(403);
+        $this->postJson('/ai-copilot/chat', [
+            'conversation_id' => $convId,
+            'message' => 'Snoop',
+        ])->assertStatus(403);
+        $this->postJson("/ai-copilot/messages/{$modelMsgId}/dismiss")->assertStatus(403);
+        $this->deleteJson("/ai-copilot/conversations/{$convId}")->assertStatus(403);
+
+        // Owner can delete conversation cleanly
+        $this->actingAs($this->accountant);
+        $this->deleteJson("/ai-copilot/conversations/{$convId}")
+            ->assertStatus(200)
+            ->assertJson(['status' => 'deleted']);
+
+        $this->assertNull(AiConversation::find($convId));
+        $this->assertEquals(0, AiMessage::where('conversation_id', $convId)->count());
     }
 }
