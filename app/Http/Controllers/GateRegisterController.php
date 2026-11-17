@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\CartonProduct;
 use App\Models\DocumentSequence;
 use App\Models\GateRegister;
+use App\Models\MediaVaultItem;
 use App\Models\Party;
 use App\Models\PartyLedgerEntry;
 use App\Models\Voucher;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\View\View;
 
 class GateRegisterController extends Controller
@@ -66,9 +69,23 @@ class GateRegisterController extends Controller
             'bilti_challan_number' => 'nullable|string|max:80',
             'invoice_number' => 'nullable|string|max:50',
             'create_invoice' => 'nullable|boolean',
+            'receipt_photo' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:20480',
         ]);
 
-        DB::transaction(function () use ($validated, $request) {
+        $receiptPath = null;
+        if ($request->hasFile('receipt_photo')) {
+            $file = $request->file('receipt_photo');
+            $uploadDir = public_path('uploads/receipts');
+            if (!File::isDirectory($uploadDir)) {
+                File::makeDirectory($uploadDir, 0777, true, true);
+            }
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            $fileName = 'gate_' . time() . '_' . uniqid() . '.' . $ext;
+            $file->move($uploadDir, $fileName);
+            $receiptPath = '/uploads/receipts/' . $fileName;
+        }
+
+        DB::transaction(function () use ($validated, $receiptPath, $request) {
             $gpNumber = !empty($validated['gate_pass_number'])
                 ? trim($validated['gate_pass_number'])
                 : DocumentSequence::generateNextNumber('GATE_PASS');
@@ -106,9 +123,12 @@ class GateRegisterController extends Controller
                 'total_pieces' => $validated['total_pieces'] ?? null,
                 'total_bundles' => $validated['total_bundles'] ?? null,
                 'status' => $status,
+                'receipt_photo_path' => $receiptPath,
                 'time_in' => now(),
                 'time_out' => $status === 'EXITED' ? now() : null,
             ]);
+
+            $party = Party::find($validated['party_id']);
 
             // Deduct finished carton stock & auto-bill if outward dispatch with carton selected
             if ($carton && !empty($validated['total_pieces'])) {
@@ -131,6 +151,7 @@ class GateRegisterController extends Controller
                         'total_amount' => $amount,
                         'payment_mode' => 'CREDIT',
                         'description' => number_format($pieces) . " Pcs {$carton->box_title} ({$gpNumber}, {$gate->vehicle_number})",
+                        'receipt_photo_path' => $receiptPath,
                     ]);
 
                     $newBalance = $party->current_balance + $amount;
@@ -147,6 +168,21 @@ class GateRegisterController extends Controller
                     $party->update(['current_balance' => $newBalance]);
                 }
             }
+
+            // Mirror into Media Vault
+            if ($receiptPath) {
+                MediaVaultItem::create([
+                    'user_id' => Auth::id(),
+                    'title' => "Gate Challan: {$gpNumber} / {$gate->vehicle_number} (" . ($party ? $party->name : 'Gate') . ")",
+                    'category' => 'GATE_CHALLAN',
+                    'file_path' => $receiptPath,
+                    'file_name' => basename($receiptPath),
+                    'linked_party_or_shop' => $party ? $party->name : null,
+                    'source_module' => 'GATE_REGISTER',
+                    'source_id' => $gate->id,
+                    'notes' => "Vehicle {$gate->vehicle_number}, Challan/Bilti: {$challanNumber}",
+                ]);
+            }
         });
 
         return redirect()->route('gate.index')->with('success', 'Vehicle entry logged at security gate.');
@@ -157,7 +193,34 @@ class GateRegisterController extends Controller
         $validated = $request->validate([
             'gross_weight_kg' => 'required|numeric|min:1',
             'tare_weight_kg' => 'required|numeric|min:1',
+            'receipt_photo' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:20480',
         ]);
+
+        $receiptPath = $gate->receipt_photo_path;
+        if ($request->hasFile('receipt_photo')) {
+            $file = $request->file('receipt_photo');
+            $uploadDir = public_path('uploads/receipts');
+            if (!File::isDirectory($uploadDir)) {
+                File::makeDirectory($uploadDir, 0777, true, true);
+            }
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            $fileName = 'weigh_slip_' . time() . '_' . uniqid() . '.' . $ext;
+            $file->move($uploadDir, $fileName);
+            $receiptPath = '/uploads/receipts/' . $fileName;
+
+            // Mirror weighbridge scale slip to vault
+            MediaVaultItem::create([
+                'user_id' => Auth::id(),
+                'title' => "Weighbridge Scale Slip: {$gate->gate_pass_number} ({$gate->vehicle_number})",
+                'category' => 'GATE_CHALLAN',
+                'file_path' => $receiptPath,
+                'file_name' => basename($receiptPath),
+                'linked_party_or_shop' => $gate->party?->name,
+                'source_module' => 'GATE_REGISTER',
+                'source_id' => $gate->id,
+                'notes' => "Gross: {$validated['gross_weight_kg']} kg, Tare: {$validated['tare_weight_kg']} kg",
+            ]);
+        }
 
         $net = abs($validated['gross_weight_kg'] - $validated['tare_weight_kg']);
 
@@ -165,6 +228,7 @@ class GateRegisterController extends Controller
             'gross_weight_kg' => $validated['gross_weight_kg'],
             'tare_weight_kg' => $validated['tare_weight_kg'],
             'net_weight_kg' => $net,
+            'receipt_photo_path' => $receiptPath,
             'status' => $gate->movement_type === 'INWARD_RAW_MATERIAL' ? 'COMPLETED' : 'EXITED',
             'time_out' => now(),
         ]);

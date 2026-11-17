@@ -12,6 +12,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\GateRegisterController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\KhataController;
+use App\Http\Controllers\MediaVaultController;
 use App\Http\Controllers\OfflineSyncController;
 use App\Http\Controllers\PettyCashController;
 use App\Http\Controllers\PrintedImportController;
@@ -45,6 +46,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
     Route::get('/chat/messages', [ChatController::class, 'getMessages'])->name('chat.messages');
     Route::post('/chat/send', [ChatController::class, 'sendMessage'])->name('chat.send');
+    Route::post('/chat/messages/{message}/edit', [ChatController::class, 'editMessage'])->name('chat.message.edit');
+    Route::delete('/chat/messages/{message}', [ChatController::class, 'deleteMessage'])->name('chat.message.delete');
+    Route::post('/chat/clear', [ChatController::class, 'clearChat'])->name('chat.clear');
+    Route::post('/chat/auto-clean', [ChatController::class, 'autoClean'])->name('chat.auto_clean');
     Route::get('/chat/unread-total', [ChatController::class, 'getGlobalUnread'])->name('chat.unread_total');
 
     // Offline PWA Sync API
@@ -103,6 +108,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/khata/party/{party}/update', [KhataController::class, 'updateParty'])->name('khata.party.update');
         Route::post('/khata/party/{party}/adjust', [KhataController::class, 'adjustBalance'])->name('khata.party.adjust');
         Route::post('/khata/voucher', [KhataController::class, 'storeVoucher'])->name('khata.voucher.store');
+
+        // Local Party Small Expenses, Barter Ledger & Camera Bill Uploads
+        Route::post('/khata/local-transactions', [KhataController::class, 'storeLocalTransaction'])->name('khata.local_transactions.store');
+        Route::put('/khata/local-transactions/{id}', [KhataController::class, 'updateLocalTransaction'])->name('khata.local_transactions.update');
+        Route::delete('/khata/local-transactions/{id}', [KhataController::class, 'destroyLocalTransaction'])->name('khata.local_transactions.destroy');
+
+        // Central Factory Media & Receipt Vault (Photos, Bills, Grocery Packs, Gate Slips)
+        Route::get('/media-vault', [MediaVaultController::class, 'index'])->name('media_vault.index');
+        Route::post('/media-vault', [MediaVaultController::class, 'store'])->name('media_vault.store');
+        Route::delete('/media-vault/{item}', [MediaVaultController::class, 'destroy'])->name('media_vault.destroy');
 
         // Petty Cash & Daily Factory Safe
         Route::get('/petty-cash', [PettyCashController::class, 'index'])->name('petty_cash.index');

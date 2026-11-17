@@ -134,6 +134,7 @@
                         <th class="py-3 px-4">Type</th>
                         <th class="py-3 px-4">Category</th>
                         <th class="py-3 px-4">Description / Narration</th>
+                        <th class="py-3 px-3 text-center">Slip/Photo</th>
                         <th class="py-3 px-4">Handled By</th>
                         <th class="py-3 px-4 text-right">Inflow (Aamad)</th>
                         <th class="py-3 px-4 text-right">Outflow (Kharch)</th>
@@ -168,6 +169,17 @@
                             <td class="py-3 px-4 text-slate-700 max-w-xs">
                                 {{ $txn->description }}
                             </td>
+                            <td class="py-3 px-3 text-center whitespace-nowrap">
+                                @if(!empty($txn->receipt_photo_path))
+                                    <button type="button" onclick="viewPettyImage('{{ asset($txn->receipt_photo_path) }}', '{{ addslashes($txn->description) }}', 'Rs. {{ number_format($txn->amount) }}', '{{ $categories[$txn->category] ?? $txn->category }}')"
+                                        class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-[11px] font-semibold transition-colors shadow-xs">
+                                        <span class="material-symbols-outlined text-xs">receipt_long</span>
+                                        <span>Slip</span>
+                                    </button>
+                                @else
+                                    <span class="text-slate-300 text-xs">—</span>
+                                @endif
+                            </td>
                             <td class="py-3 px-4 text-slate-600 whitespace-nowrap">
                                 {{ $txn->spent_by_or_paid_to ?: $txn->recorded_by }}
                             </td>
@@ -183,7 +195,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="py-12 text-center text-slate-400">
+                            <td colspan="9" class="py-12 text-center text-slate-400">
                                 <span class="material-symbols-outlined text-4xl block mb-2 text-slate-300">receipt_long</span>
                                 No petty cash transactions recorded yet. Click above to record cash in or daily expense.
                             </td>
@@ -218,7 +230,7 @@
             </button>
         </div>
 
-        <form action="{{ route('petty_cash.store') }}" method="POST" class="space-y-4 mt-4">
+        <form action="{{ route('petty_cash.store') }}" method="POST" enctype="multipart/form-data" class="space-y-4 mt-4">
             @csrf
             <input type="hidden" name="transaction_type" value="CASH_OUT" />
 
@@ -253,6 +265,31 @@
                     class="w-full rounded-lg border-slate-300 text-sm focus:border-blue-600 focus:ring-blue-600" />
             </div>
 
+            <!-- Option C: In-Form Media Photo Capture -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Receipt / Bill / Grocery Photo (Optional)</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-dashed border-red-200 bg-red-50/40 hover:bg-red-50 rounded-xl cursor-pointer text-xs font-semibold text-red-700 transition-colors">
+                        <span class="material-symbols-outlined text-base">photo_camera</span>
+                        <span>Camera Snap</span>
+                        <input type="file" name="receipt_photo" accept="image/*" capture="environment" class="hidden" onchange="previewPettyPhoto(this, 'cash-out-preview')" />
+                    </label>
+                    <label class="flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer text-xs font-medium text-slate-700 transition-colors">
+                        <span class="material-symbols-outlined text-base">upload_file</span>
+                        <span>Upload File</span>
+                        <input type="file" name="receipt_photo" accept="image/*,.pdf" class="hidden" onchange="previewPettyPhoto(this, 'cash-out-preview')" />
+                    </label>
+                </div>
+                <div id="cash-out-preview" class="hidden mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 truncate">
+                        <span class="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+                        <span class="preview-filename font-medium truncate"></span>
+                    </div>
+                    <button type="button" onclick="clearPettyPhoto('cash-out-preview')" class="text-red-500 hover:text-red-700 text-sm font-bold ml-2">&times;</button>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-1">Snaps directly on mobile camera. Auto-mirrored into the Media Vault.</p>
+            </div>
+
             <div class="pt-2 flex justify-end gap-2">
                 <button type="button" onclick="closeModal('modal-cash-out')"
                     class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700">Cancel</button>
@@ -280,7 +317,7 @@
             </button>
         </div>
 
-        <form action="{{ route('petty_cash.store') }}" method="POST" class="space-y-4 mt-4">
+        <form action="{{ route('petty_cash.store') }}" method="POST" enctype="multipart/form-data" class="space-y-4 mt-4">
             @csrf
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Transaction Nature *</label>
@@ -319,6 +356,30 @@
                     class="w-full rounded-lg border-slate-300 text-sm focus:border-blue-600 focus:ring-blue-600" />
             </div>
 
+            <!-- Option C: In-Form Media Photo Capture -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Receipt / Bank Slip / Photo (Optional)</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-dashed border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 rounded-xl cursor-pointer text-xs font-semibold text-emerald-700 transition-colors">
+                        <span class="material-symbols-outlined text-base">photo_camera</span>
+                        <span>Camera Snap</span>
+                        <input type="file" name="receipt_photo" accept="image/*" capture="environment" class="hidden" onchange="previewPettyPhoto(this, 'cash-in-preview')" />
+                    </label>
+                    <label class="flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer text-xs font-medium text-slate-700 transition-colors">
+                        <span class="material-symbols-outlined text-base">upload_file</span>
+                        <span>Upload File</span>
+                        <input type="file" name="receipt_photo" accept="image/*,.pdf" class="hidden" onchange="previewPettyPhoto(this, 'cash-in-preview')" />
+                    </label>
+                </div>
+                <div id="cash-in-preview" class="hidden mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 truncate">
+                        <span class="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+                        <span class="preview-filename font-medium truncate"></span>
+                    </div>
+                    <button type="button" onclick="clearPettyPhoto('cash-in-preview')" class="text-red-500 hover:text-red-700 text-sm font-bold ml-2">&times;</button>
+                </div>
+            </div>
+
             <div class="pt-2 flex justify-end gap-2">
                 <button type="button" onclick="closeModal('modal-cash-in')"
                     class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700">Cancel</button>
@@ -328,6 +389,78 @@
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Modal: Fullscreen Slip / Receipt Viewer -->
+<div id="modal-petty-viewer" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-slate-200 max-w-2xl w-full p-5 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                </div>
+                <div>
+                    <h3 id="petty-modal-title" class="text-sm font-bold text-slate-900">Receipt / Slip Viewer</h3>
+                    <p id="petty-modal-subtitle" class="text-[11px] text-slate-500"></p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <a id="petty-modal-download" href="#" target="_blank" download class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors" title="Download / Open Full">
+                    <span class="material-symbols-outlined text-[18px]">open_in_new</span>
+                </a>
+                <button type="button" onclick="closeModal('modal-petty-viewer')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600">
+                    <span class="material-symbols-outlined text-[18px]">close</span>
+                </button>
+            </div>
+        </div>
+        <div class="p-4 bg-slate-950/5 rounded-xl my-3 flex items-center justify-center overflow-auto flex-1 min-h-[300px]">
+            <img id="petty-modal-img" src="" alt="Receipt Photo" class="max-h-[60vh] max-w-full rounded-lg object-contain shadow-sm border border-slate-200" />
+        </div>
+        <div class="pt-2 flex justify-between items-center text-xs text-slate-500">
+            <a href="{{ route('media_vault.index') }}" class="text-blue-600 hover:underline font-semibold flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">perm_media</span>
+                <span>Open in Central Media Vault</span>
+            </a>
+            <button type="button" onclick="closeModal('modal-petty-viewer')" class="px-4 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function previewPettyPhoto(input, containerId) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.querySelector('.preview-filename').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+            container.classList.remove('hidden');
+            container.classList.add('flex');
+        }
+    }
+}
+
+function clearPettyPhoto(containerId) {
+    const container = document.getElementById(containerId);
+    if (container) {
+        container.classList.add('hidden');
+        container.classList.remove('flex');
+        const modal = container.closest('form');
+        if (modal) {
+            const inputs = modal.querySelectorAll('input[type="file"]');
+            inputs.forEach(i => i.value = '');
+        }
+    }
+}
+
+function viewPettyImage(imgUrl, desc, amount, category) {
+    document.getElementById('petty-modal-img').src = imgUrl;
+    document.getElementById('petty-modal-title').textContent = desc || 'Receipt / Proof';
+    document.getElementById('petty-modal-subtitle').textContent = (category || 'Petty Cash') + ' • ' + (amount || '');
+    document.getElementById('petty-modal-download').href = imgUrl;
+    openModal('modal-petty-viewer');
+}
+</script>
     </div>
 </div>
 @endsection

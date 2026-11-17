@@ -19,6 +19,7 @@ class Voucher extends Model
         'reference_number',
         'description',
         'created_by',
+        'receipt_photo_path',
     ];
 
     protected $casts = [

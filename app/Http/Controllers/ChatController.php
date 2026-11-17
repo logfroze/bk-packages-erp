@@ -108,13 +108,176 @@ class ChatController extends Controller
             $messages = $query->orderBy('created_at')->get();
         }
 
+        $lastSync = $request->query('last_sync');
+        $updatedMessages = collect();
+
+        if ($afterId > 0) {
+            $updatedQuery = ($activeType === 'user' && $receiverId)
+                ? ChatMessage::betweenUsers($me->id, (int) $receiverId)->with('sender')
+                : ChatMessage::groupChannel()->with('sender');
+
+            $since = $lastSync ? \Carbon\Carbon::parse($lastSync) : now()->subSeconds(20);
+            $updatedMessages = $updatedQuery->where('id', '<=', $afterId)
+                ->where('updated_at', '>=', $since)
+                ->get()
+                ->map(fn ($m) => $this->formatMessage($m, $me->id));
+        }
+
         $formatted = $messages->map(function ($m) use ($me) {
             return $this->formatMessage($m, $me->id);
         });
 
         return response()->json([
             'messages' => $formatted,
+            'updated_messages' => $updatedMessages,
             'count' => $formatted->count(),
+            'sync_time' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Edit a previously sent message (WhatsApp-style).
+     */
+    public function editMessage(Request $request, ChatMessage $message): JsonResponse
+    {
+        $me = Auth::user();
+
+        if ($message->sender_id !== $me->id && ! $me->isFullAdmin()) {
+            return response()->json(['error' => 'You can only edit your own messages.'], 403);
+        }
+
+        if ($message->is_deleted) {
+            return response()->json(['error' => 'Deleted messages cannot be edited.'], 422);
+        }
+
+        $validated = $request->validate([
+            'message_text' => 'required|string|max:5000',
+        ]);
+
+        $message->update([
+            'message_text' => trim($validated['message_text']),
+            'is_edited' => true,
+            'edited_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $this->formatMessage($message->fresh('sender'), $me->id),
+        ]);
+    }
+
+    /**
+     * Delete a sent message (WhatsApp-style "Delete for Everyone").
+     * Also unlinks and cleans up physical attachment files to preserve server storage.
+     */
+    public function deleteMessage(Request $request, ChatMessage $message): JsonResponse
+    {
+        $me = Auth::user();
+
+        if ($message->sender_id !== $me->id && ! $me->isFullAdmin()) {
+            return response()->json(['error' => 'You can only delete your own messages.'], 403);
+        }
+
+        // Delete physical attachment from disk if present to free disk space
+        if (! empty($message->attachment_path)) {
+            $fullPath = public_path($message->attachment_path);
+            if (File::exists($fullPath)) {
+                @unlink($fullPath);
+            }
+        }
+
+        $message->update([
+            'is_deleted' => true,
+            'deleted_by' => $me->id,
+            'message_text' => null,
+            'attachment_path' => null,
+            'attachment_name' => null,
+            'attachment_type' => null,
+            'attachment_mime' => null,
+            'attachment_size' => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $this->formatMessage($message->fresh('sender'), $me->id),
+        ]);
+    }
+
+    /**
+     * Clear / Delete the entire chat history for the active conversation.
+     * Deletes all attachment files from public/uploads/chat to immediately reclaim disk space.
+     */
+    public function clearChat(Request $request): JsonResponse
+    {
+        $me = Auth::user();
+        $validated = $request->validate([
+            'active_type' => 'required|in:group,user',
+            'receiver_id' => 'nullable|exists:users,id',
+        ]);
+
+        $query = ($validated['active_type'] === 'user' && ! empty($validated['receiver_id']))
+            ? ChatMessage::betweenUsers($me->id, (int) $validated['receiver_id'])
+            : ChatMessage::groupChannel();
+
+        // 1. Reclaim disk space by deleting all physical attachment files
+        $attachments = (clone $query)->whereNotNull('attachment_path')->pluck('attachment_path');
+        foreach ($attachments as $filePath) {
+            $fullPath = public_path($filePath);
+            if (File::exists($fullPath)) {
+                @unlink($fullPath);
+            }
+        }
+
+        // 2. Delete database records
+        $deletedCount = $query->delete();
+
+        return response()->json([
+            'success' => true,
+            'deleted_count' => $deletedCount,
+            'freed_files' => $attachments->count(),
+            'message' => "Chat cleared successfully ({$deletedCount} messages removed).",
+        ]);
+    }
+
+    /**
+     * Auto-Clean / Purge old chat messages and files older than a chosen threshold.
+     */
+    public function autoClean(Request $request): JsonResponse
+    {
+        $me = Auth::user();
+        if (! $me->isFullAdmin() && ! $me->isManager()) {
+            return response()->json(['error' => 'Unauthorized action.'], 403);
+        }
+
+        $validated = $request->validate([
+            'period' => 'required|in:24_hours,7_days,30_days,all',
+        ]);
+
+        $cutoff = match ($validated['period']) {
+            '24_hours' => now()->subDay(),
+            '7_days' => now()->subDays(7),
+            '30_days' => now()->subDays(30),
+            'all' => now(),
+        };
+
+        $query = ChatMessage::where('created_at', '<=', $cutoff);
+
+        // Delete physical files
+        $attachments = (clone $query)->whereNotNull('attachment_path')->pluck('attachment_path');
+        foreach ($attachments as $filePath) {
+            $fullPath = public_path($filePath);
+            if (File::exists($fullPath)) {
+                @unlink($fullPath);
+            }
+        }
+
+        $deletedCount = $query->delete();
+
+        return response()->json([
+            'success' => true,
+            'deleted_count' => $deletedCount,
+            'freed_files' => $attachments->count(),
+            'message' => "Purged {$deletedCount} old messages and {$attachments->count()} attachment files from server storage.",
         ]);
     }
 
@@ -218,6 +381,8 @@ class ChatController extends Controller
     protected function formatMessage(ChatMessage $m, int $myId): array
     {
         $isMe = ($m->sender_id === $myId);
+        $user = Auth::user();
+        $canModify = $isMe || ($user && $user->isFullAdmin());
 
         return [
             'id' => $m->id,
@@ -233,6 +398,12 @@ class ChatController extends Controller
             'formatted_size' => $m->formattedSize(),
             'formatted_time' => $m->formattedTime(),
             'is_read' => (bool) $m->is_read,
+            'is_edited' => (bool) $m->is_edited,
+            'edited_at' => $m->edited_at?->format('h:i A'),
+            'is_deleted' => (bool) $m->is_deleted,
+            'deleted_by' => $m->deleted_by,
+            'deleted_by_me' => ($m->deleted_by === $myId),
+            'can_modify' => $canModify,
         ];
     }
 }

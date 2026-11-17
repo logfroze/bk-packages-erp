@@ -16,6 +16,7 @@ class PettyCashTransaction extends Model
         'spent_by_or_paid_to',
         'description',
         'receipt_voucher_id',
+        'receipt_photo_path',
         'transaction_date',
         'recorded_by',
     ];
@@ -33,7 +34,7 @@ class PettyCashTransaction extends Model
 
     public static function currentCashBalance(): float
     {
-        $last = self::latest('id')->first();
+        $last = self::latest('id')->select('running_cash_balance')->first();
         return $last ? (float) $last->running_cash_balance : 0.00;
     }
 
@@ -44,7 +45,8 @@ class PettyCashTransaction extends Model
         string $description,
         ?string $spentByOrPaidTo = null,
         ?int $voucherId = null,
-        ?string $recordedBy = null
+        ?string $recordedBy = null,
+        ?string $receiptPhotoPath = null
     ): self {
         $current = self::currentCashBalance();
         $newBalance = $type === 'CASH_IN' || $type === 'COUNTER_SALE'
@@ -63,6 +65,7 @@ class PettyCashTransaction extends Model
             'spent_by_or_paid_to' => $spentByOrPaidTo,
             'description' => $description,
             'receipt_voucher_id' => $voucherId,
+            'receipt_photo_path' => $receiptPhotoPath,
             'transaction_date' => now()->toDateString(),
             'recorded_by' => $recordedBy ?? auth()->user()?->name ?? 'Mirza Sohail',
         ]);

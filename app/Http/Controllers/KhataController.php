@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CustomErpCard;
+use App\Models\LocalPartyTransaction;
+use App\Models\MediaVaultItem;
 use App\Models\Party;
 use App\Models\PartyLedgerEntry;
 use App\Models\Voucher;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\View\View;
 
 class KhataController extends Controller
@@ -40,13 +45,46 @@ class KhataController extends Controller
 
         $parties = $query->get();
 
-        $totalReceivables = Party::where('current_balance', '>', 0)->sum('current_balance');
-        $totalPayables = abs(Party::where('current_balance', '<', 0)->sum('current_balance'));
-        $localVendorPayables = abs(Party::where('classification', 'LOCAL_VENDOR_SHOP')->where('current_balance', '<', 0)->sum('current_balance'));
+        // Consolidated single query for party balance aggregates
+        $balanceStats = Party::selectRaw("
+            COALESCE(SUM(CASE WHEN current_balance > 0 THEN current_balance ELSE 0 END), 0) as receivables,
+            COALESCE(SUM(CASE WHEN current_balance < 0 THEN ABS(current_balance) ELSE 0 END), 0) as payables,
+            COALESCE(SUM(CASE WHEN classification = 'LOCAL_VENDOR_SHOP' AND current_balance < 0 THEN ABS(current_balance) ELSE 0 END), 0) as local_payables
+        ")->first();
 
-        $cashReceipts = Voucher::where('voucher_type', 'RECEIPT_VOUCHER')->where('payment_mode', 'CASH')->sum('total_amount');
-        $cashPayments = Voucher::whereIn('voucher_type', ['PAYMENT_VOUCHER', 'EXPENSE_VOUCHER'])->where('payment_mode', 'CASH')->sum('total_amount');
+        $totalReceivables = (float) ($balanceStats->receivables ?? 0);
+        $totalPayables = (float) ($balanceStats->payables ?? 0);
+        $localVendorPayables = (float) ($balanceStats->local_payables ?? 0);
+
+        // Consolidated single query for cash in hand
+        $cashStats = Voucher::where('payment_mode', 'CASH')->selectRaw("
+            COALESCE(SUM(CASE WHEN voucher_type = 'RECEIPT_VOUCHER' THEN total_amount ELSE 0 END), 0) as receipts,
+            COALESCE(SUM(CASE WHEN voucher_type IN ('PAYMENT_VOUCHER', 'EXPENSE_VOUCHER') THEN total_amount ELSE 0 END), 0) as payments
+        ")->first();
+
+        $cashReceipts = (float) ($cashStats->receipts ?? 0);
+        $cashPayments = (float) ($cashStats->payments ?? 0);
         $cashInHand = max(0, $cashReceipts - $cashPayments);
+
+        // Local Party & Small Shop Barter / Expense Transactions
+        $localTransactions = LocalPartyTransaction::with('party', 'user')
+            ->latest('transaction_datetime')
+            ->latest('id')
+            ->take(30)
+            ->get();
+
+        // Consolidated single query for barter totals
+        $localBarterStats = LocalPartyTransaction::selectRaw("
+            COALESCE(SUM(CASE WHEN transaction_type = 'WE_BOUGHT' THEN total_amount ELSE 0 END), 0) as we_bought,
+            COALESCE(SUM(CASE WHEN transaction_type = 'THEY_BOUGHT' THEN total_amount ELSE 0 END), 0) as they_bought
+        ")->first();
+
+        $totalWeBought = (float) ($localBarterStats->we_bought ?? 0);
+        $totalTheyBought = (float) ($localBarterStats->they_bought ?? 0);
+        $netLocalBalance = $totalTheyBought - $totalWeBought;
+
+        $localCustomCards = CustomErpCard::forPage('khata_local_party');
+        $localShopList = Party::where('classification', 'LOCAL_VENDOR_SHOP')->orWhere('type', 'SUPPLIER')->orderBy('name')->get(['id', 'name', 'city']);
 
         return view('khata.index', compact(
             'parties',
@@ -56,7 +94,13 @@ class KhataController extends Controller
             'totalReceivables',
             'totalPayables',
             'localVendorPayables',
-            'cashInHand'
+            'cashInHand',
+            'localTransactions',
+            'totalWeBought',
+            'totalTheyBought',
+            'netLocalBalance',
+            'localCustomCards',
+            'localShopList'
         ));
     }
 
@@ -194,9 +238,23 @@ class KhataController extends Controller
             'reference_number' => 'nullable|string|max:100',
             'description' => 'required|string|max:500',
             'voucher_date' => 'nullable|date',
+            'receipt_photo' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:20480',
         ]);
 
-        DB::transaction(function () use ($validated) {
+        $receiptPath = null;
+        if ($request->hasFile('receipt_photo')) {
+            $file = $request->file('receipt_photo');
+            $uploadDir = public_path('uploads/receipts');
+            if (!File::isDirectory($uploadDir)) {
+                File::makeDirectory($uploadDir, 0777, true, true);
+            }
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            $fileName = 'voucher_' . time() . '_' . uniqid() . '.' . $ext;
+            $file->move($uploadDir, $fileName);
+            $receiptPath = '/uploads/receipts/' . $fileName;
+        }
+
+        DB::transaction(function () use ($validated, $receiptPath) {
             $lastId = Voucher::max('id') ?? 0;
             $prefix = match ($validated['voucher_type']) {
                 'RECEIPT_VOUCHER' => 'CR-',
@@ -216,8 +274,10 @@ class KhataController extends Controller
                 'payment_mode' => $validated['payment_mode'],
                 'reference_number' => $validated['reference_number'] ?? null,
                 'description' => $validated['description'],
+                'receipt_photo_path' => $receiptPath,
             ]);
 
+            $party = null;
             if (!empty($validated['party_id'])) {
                 $party = Party::lockForUpdate()->findOrFail($validated['party_id']);
                 $amount = (float) $validated['total_amount'];
@@ -242,8 +302,136 @@ class KhataController extends Controller
 
                 $party->update(['current_balance' => $newBalance]);
             }
+
+            if ($receiptPath) {
+                MediaVaultItem::create([
+                    'user_id' => Auth::id(),
+                    'title' => "Voucher {$voucherNumber}: " . ($party ? $party->name : $validated['description']),
+                    'category' => 'RECEIPT_VOUCHER',
+                    'file_path' => $receiptPath,
+                    'file_name' => basename($receiptPath),
+                    'linked_amount' => (float) $validated['total_amount'],
+                    'linked_party_or_shop' => $party ? $party->name : null,
+                    'source_module' => 'VOUCHER',
+                    'source_id' => $voucher->id,
+                    'notes' => $validated['description'],
+                ]);
+            }
         });
 
         return back()->with('success', 'Voucher recorded & party ledger updated.');
+    }
+
+    public function storeLocalTransaction(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'shop_name' => 'required|string|max:150',
+            'shop_city' => 'nullable|string|max:100',
+            'party_id' => 'nullable|exists:parties,id',
+            'transaction_type' => 'required|in:WE_BOUGHT,THEY_BOUGHT',
+            'item_description' => 'required|string|max:255',
+            'quantity_details' => 'nullable|string|max:100',
+            'unit_price' => 'nullable|numeric|min:0',
+            'total_amount' => 'required|numeric|min:0',
+            'payment_status' => 'required|in:PAID_CASH,ADDED_TO_KHATA,SETTLED,PARTIAL',
+            'transaction_datetime' => 'nullable|date',
+            'receipt_photo' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:20480',
+            'notes' => 'nullable|string|max:1000',
+            'custom_fields' => 'nullable|array',
+            'custom_grid' => 'nullable|array',
+        ]);
+
+        $receiptPath = null;
+        if ($request->hasFile('receipt_photo')) {
+            $file = $request->file('receipt_photo');
+            $uploadDir = public_path('uploads/receipts');
+            if (! File::isDirectory($uploadDir)) {
+                File::makeDirectory($uploadDir, 0777, true, true);
+            }
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            $fileName = 'local_'.time().'_'.uniqid().'.'.$ext;
+            $file->move($uploadDir, $fileName);
+            $receiptPath = '/uploads/receipts/'.$fileName;
+        }
+
+        $tx = LocalPartyTransaction::create([
+            'party_id' => $validated['party_id'] ?? null,
+            'shop_name' => trim($validated['shop_name']),
+            'shop_city' => $validated['shop_city'] ? trim($validated['shop_city']) : 'Okara',
+            'transaction_type' => $validated['transaction_type'],
+            'item_description' => trim($validated['item_description']),
+            'quantity_details' => $validated['quantity_details'] ?? null,
+            'unit_price' => (float) ($validated['unit_price'] ?? 0),
+            'total_amount' => (float) $validated['total_amount'],
+            'payment_status' => $validated['payment_status'],
+            'receipt_photo_path' => $receiptPath,
+            'transaction_datetime' => $validated['transaction_datetime'] ?? now(),
+            'recorded_by_name' => Auth::user()?->name ?? 'Staff',
+            'user_id' => Auth::id(),
+            'custom_fields' => $validated['custom_fields'] ?? null,
+            'custom_grid' => $validated['custom_grid'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        // Automatically feed into the unified Factory Media Vault
+        if ($receiptPath) {
+            MediaVaultItem::create([
+                'user_id' => Auth::id(),
+                'title' => 'Local Shop: ' . $tx->shop_name . ' — ' . $tx->item_description,
+                'category' => 'LOCAL_PARTY_BILL',
+                'file_path' => $receiptPath,
+                'file_name' => basename($receiptPath),
+                'linked_amount' => (float) $tx->total_amount,
+                'linked_party_or_shop' => $tx->shop_name,
+                'source_module' => 'LOCAL_PARTY',
+                'source_id' => $tx->id,
+                'notes' => $tx->notes,
+            ]);
+        }
+
+        return redirect()->route('khata.index')->with('success', "Local party entry for '{$tx->shop_name}' saved successfully!");
+    }
+
+    public function updateLocalTransaction(Request $request, $id): RedirectResponse
+    {
+        $tx = LocalPartyTransaction::findOrFail($id);
+        $validated = $request->validate([
+            'shop_name' => 'required|string|max:150',
+            'transaction_type' => 'required|in:WE_BOUGHT,THEY_BOUGHT',
+            'item_description' => 'required|string|max:255',
+            'quantity_details' => 'nullable|string|max:100',
+            'unit_price' => 'nullable|numeric|min:0',
+            'total_amount' => 'required|numeric|min:0',
+            'payment_status' => 'required|in:PAID_CASH,ADDED_TO_KHATA,SETTLED,PARTIAL',
+            'notes' => 'nullable|string',
+            'custom_fields' => 'nullable|array',
+            'custom_grid' => 'nullable|array',
+        ]);
+
+        $tx->update([
+            'shop_name' => trim($validated['shop_name']),
+            'transaction_type' => $validated['transaction_type'],
+            'item_description' => trim($validated['item_description']),
+            'quantity_details' => $validated['quantity_details'] ?? null,
+            'unit_price' => (float) ($validated['unit_price'] ?? 0),
+            'total_amount' => (float) $validated['total_amount'],
+            'payment_status' => $validated['payment_status'],
+            'notes' => $validated['notes'] ?? null,
+            'custom_fields' => $validated['custom_fields'] ?? $tx->custom_fields,
+            'custom_grid' => $validated['custom_grid'] ?? $tx->custom_grid,
+        ]);
+
+        return redirect()->route('khata.index')->with('success', "Local party entry #{$tx->id} updated.");
+    }
+
+    public function destroyLocalTransaction($id): RedirectResponse
+    {
+        $tx = LocalPartyTransaction::findOrFail($id);
+        if ($tx->receipt_photo_path && File::exists(public_path($tx->receipt_photo_path))) {
+            @unlink(public_path($tx->receipt_photo_path));
+        }
+        $tx->delete();
+
+        return redirect()->route('khata.index')->with('success', 'Local party transaction deleted.');
     }
 }

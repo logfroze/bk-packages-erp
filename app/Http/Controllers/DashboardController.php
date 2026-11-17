@@ -20,41 +20,61 @@ class DashboardController extends Controller
     public function index(): View
     {
         $today = Carbon::today();
+        $cacheKey = 'dashboard_numerical_stats_' . $today->toDateString();
 
-        $todayProduction = ProductionBatch::whereDate('updated_at', $today)->sum('produced_quantity');
-        if ($todayProduction == 0) {
-            $todayProduction = ProductionBatch::where('status', 'RUNNING')->sum('produced_quantity');
-        }
+        // Cache heavy numerical aggregate calculations for 20 seconds
+        $stats = Cache::remember($cacheKey, 20, function () use ($today) {
+            $todayProduction = ProductionBatch::whereDate('updated_at', $today)->sum('produced_quantity');
+            if ($todayProduction == 0) {
+                $todayProduction = (float) ProductionBatch::where('status', 'RUNNING')->sum('produced_quantity');
+            }
 
-        $trucksDispatched = GateRegister::where('movement_type', 'OUTWARD_DISPATCH')
-            ->whereDate('time_in', $today)
-            ->count();
+            // Consolidated single query for today's gate outward dispatch stats
+            $gateStats = GateRegister::where('movement_type', 'OUTWARD_DISPATCH')
+                ->whereDate('time_in', $today)
+                ->selectRaw('COUNT(*) as trucks, COALESCE(SUM(total_pieces), 0) as pieces')
+                ->first();
 
-        $boxesDispatched = GateRegister::where('movement_type', 'OUTWARD_DISPATCH')
-            ->whereDate('time_in', $today)
-            ->sum('total_pieces');
+            $trucksDispatched = (int) ($gateStats->trucks ?? 0);
+            $boxesDispatched = (int) ($gateStats->pieces ?? 0);
 
-        $cashReceipts = Voucher::where('voucher_type', 'RECEIPT_VOUCHER')
-            ->where('payment_mode', 'CASH')
-            ->sum('total_amount');
+            // Consolidated single query for cash vouchers
+            $cashStats = Voucher::where('payment_mode', 'CASH')
+                ->selectRaw("
+                    COALESCE(SUM(CASE WHEN voucher_type = 'RECEIPT_VOUCHER' THEN total_amount ELSE 0 END), 0) as receipts,
+                    COALESCE(SUM(CASE WHEN voucher_type IN ('PAYMENT_VOUCHER', 'EXPENSE_VOUCHER') THEN total_amount ELSE 0 END), 0) as payments
+                ")->first();
 
-        $cashPayments = Voucher::whereIn('voucher_type', ['PAYMENT_VOUCHER', 'EXPENSE_VOUCHER'])
-            ->where('payment_mode', 'CASH')
-            ->sum('total_amount');
+            $cashReceipts = (float) ($cashStats->receipts ?? 0);
+            $cashPayments = (float) ($cashStats->payments ?? 0);
+            $cashInHand = max(0, $cashReceipts - $cashPayments);
 
-        $cashInHand = max(0, $cashReceipts - $cashPayments);
+            $pendingOrdersCount = (int) ProductionBatch::whereIn('status', ['QUEUED', 'RUNNING'])->count();
+            $totalFinishedStock = (int) CartonProduct::sum('stock_pieces');
+            $totalRawMaterialKg = (float) RawMaterial::whereIn('category', ['KRAFT_LINER', 'FLUTING_MEDIUM', 'WHITE_TOP'])->sum('total_stock_qty');
+            $totalRawMaterialTons = round($totalRawMaterialKg / 1000, 1);
+            $pettyCashBalance = PettyCashTransaction::currentCashBalance();
+            $presentWorkersCount = (int) DailyAttendance::whereDate('attendance_date', $today)->where('status', 'PRESENT')->count();
 
-        $pendingOrdersCount = ProductionBatch::whereIn('status', ['QUEUED', 'RUNNING'])->count();
+            return [
+                'todayProduction' => (float) $todayProduction,
+                'trucksDispatched' => $trucksDispatched,
+                'boxesDispatched' => $boxesDispatched,
+                'cashInHand' => $cashInHand,
+                'pendingOrdersCount' => $pendingOrdersCount,
+                'totalFinishedStock' => $totalFinishedStock,
+                'totalRawMaterialKg' => $totalRawMaterialKg,
+                'totalRawMaterialTons' => $totalRawMaterialTons,
+                'pettyCashBalance' => $pettyCashBalance,
+                'presentWorkersCount' => $presentWorkersCount,
+            ];
+        });
+
         $nextPendingBatch = ProductionBatch::with('client')->whereIn('status', ['QUEUED', 'RUNNING'])->first();
 
         $runningBatches = ProductionBatch::with(['cartonProduct', 'client'])
             ->where('status', 'RUNNING')
             ->get();
-
-        $totalFinishedStock = CartonProduct::sum('stock_pieces');
-        $totalRawMaterialKg = (float) RawMaterial::whereIn('category', ['KRAFT_LINER', 'FLUTING_MEDIUM', 'WHITE_TOP'])->sum('total_stock_qty');
-        $totalRawMaterialTons = round($totalRawMaterialKg / 1000, 1);
-        $pettyCashBalance = PettyCashTransaction::currentCashBalance();
 
         $recentGates = GateRegister::with('party')
             ->latest('time_in')
@@ -92,36 +112,22 @@ class DashboardController extends Controller
             ->take(5)
             ->values();
 
-        $customers = Party::where('type', 'CUSTOMER')->orderBy('name')->get();
         $allParties = Party::orderBy('name')->get();
+        $customers = $allParties->where('type', 'CUSTOMER')->values();
         $cartonProducts = CartonProduct::with('client')->orderBy('box_title')->get();
-        $presentWorkersCount = DailyAttendance::whereDate('attendance_date', $today)->where('status', 'PRESENT')->count();
-
-        $data = compact(
-            'todayProduction',
-            'trucksDispatched',
-            'boxesDispatched',
-            'cashInHand',
-            'pendingOrdersCount',
-            'nextPendingBatch',
-            'runningBatches',
-            'totalFinishedStock',
-            'totalRawMaterialKg',
-            'totalRawMaterialTons',
-            'pettyCashBalance',
-            'activityLog',
-            'customers',
-            'allParties',
-            'cartonProducts',
-            'presentWorkersCount'
-        );
 
         // Dynamic Document sequence preview numbers (always fresh)
         $previewGatePass = DocumentSequence::previewNextNumber('GATE_PASS');
         $previewChallan = DocumentSequence::previewNextNumber('DELIVERY_CHALLAN');
         $previewInvoice = DocumentSequence::previewNextNumber('SALES_INVOICE');
 
-        return view('dashboard', array_merge($data, compact(
+        return view('dashboard', array_merge($stats, compact(
+            'nextPendingBatch',
+            'runningBatches',
+            'activityLog',
+            'customers',
+            'allParties',
+            'cartonProducts',
             'previewGatePass',
             'previewChallan',
             'previewInvoice'

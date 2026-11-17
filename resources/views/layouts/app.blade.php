@@ -45,6 +45,63 @@
             vertical-align: middle;
         }
 
+        /* Solid, High-Definition ERP Borders & Separation */
+        .border-slate-100 {
+            border-color: #E2E8F0 !important;
+        }
+        .border-slate-200 {
+            border-color: #CBD5E1 !important; /* solid slate-300 definition */
+        }
+        .border-slate-300 {
+            border-color: #94A3B8 !important; /* strong defined border */
+        }
+
+        /* Solid defined card & container outlines */
+        .bg-white.rounded-2xl,
+        .bg-white.rounded-xl,
+        .bg-white.rounded-lg {
+            border-color: #CBD5E1 !important;
+            box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04) !important;
+        }
+
+        /* Solid, High-Contrast Tables */
+        table {
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+        }
+        table thead tr {
+            background-color: #F8FAFC !important;
+        }
+        table thead th {
+            border-bottom: 2px solid #CBD5E1 !important;
+            color: #334155 !important;
+            font-weight: 600 !important;
+        }
+        table tbody tr {
+            border-bottom: 1px solid #E2E8F0 !important;
+        }
+        table tbody tr:hover {
+            background-color: #F8FAFC !important;
+        }
+
+        /* Solid Form Controls */
+        input[type="text"],
+        input[type="number"],
+        input[type="email"],
+        input[type="password"],
+        input[type="date"],
+        input[type="search"],
+        select,
+        textarea {
+            border-color: #CBD5E1 !important;
+        }
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: #0F172A !important;
+            --tw-ring-color: #0F172A !important;
+        }
+
         @media (min-width: 1024px) {
             html.ai-dock-open #workspace-shell {
                 margin-right: 360px;
@@ -244,6 +301,13 @@
                         <span
                             class="material-symbols-outlined {{ request()->routeIs('reports.*') ? 'text-blue-400' : '' }}">summarize</span>
                         <span>Day-End Reports</span>
+                    </a>
+
+                    <a href="{{ route('media_vault.index') }}"
+                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('media_vault.*') ? 'bg-navy-800 text-white border-l-4 border-blue-500' : 'text-slate-300 hover:bg-navy-800/60 hover:text-white' }}">
+                        <span
+                            class="material-symbols-outlined {{ request()->routeIs('media_vault.*') ? 'text-blue-400' : '' }}">photo_library</span>
+                        <span>Media & Receipts Vault</span>
                     </a>
 
                     @if(auth()->user()?->isFullAdmin())

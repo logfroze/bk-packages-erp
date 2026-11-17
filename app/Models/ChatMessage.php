@@ -21,10 +21,17 @@ class ChatMessage extends Model
         'attachment_mime',
         'attachment_size',
         'is_read',
+        'is_edited',
+        'edited_at',
+        'is_deleted',
+        'deleted_by',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
+        'is_edited' => 'boolean',
+        'is_deleted' => 'boolean',
+        'edited_at' => 'datetime',
         'attachment_size' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

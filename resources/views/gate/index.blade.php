@@ -106,6 +106,13 @@
                                             Weigh & Exit
                                         </button>
                                     @endif
+                                    @if($g->receipt_photo_path)
+                                        <button type="button" onclick="viewGateReceipt('{{ asset($g->receipt_photo_path) }}', 'Gate Pass: {{ $g->gate_pass_number }}', 'Vehicle: {{ $g->vehicle_number }} • {{ addslashes($g->party->name ?? 'Gate') }}')"
+                                            class="px-2.5 py-1.5 rounded-lg border border-purple-200 bg-purple-50 text-purple-700 text-xs font-semibold hover:bg-purple-100 inline-flex items-center gap-1 shadow-xs">
+                                            <span class="material-symbols-outlined text-[15px]">image</span>
+                                            <span>Photo</span>
+                                        </button>
+                                    @endif
                                     @if($g->movement_type === 'OUTWARD_DISPATCH')
                                         <a href="{{ route('documents.delivery_challan', $g->id) }}" target="_blank"
                                            class="px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 inline-flex items-center gap-1">
@@ -142,7 +149,7 @@
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
-            <form action="{{ route('gate.store') }}" method="POST" class="mt-4 space-y-4">
+            <form action="{{ route('gate.store') }}" method="POST" enctype="multipart/form-data" class="mt-4 space-y-4">
                 @csrf
                 <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
                     <span class="text-slate-600">Auto Gate Pass #: <strong class="text-navy-900 font-mono">{{ $previewGatePass ?? \App\Models\DocumentSequence::previewNextNumber('GATE_PASS') }}</strong></span>
@@ -204,6 +211,31 @@
                     <label class="block text-xs font-semibold text-slate-700 mb-1">Cargo / Material Notes</label>
                     <input type="text" name="material_summary" placeholder="e.g. 28 Rolls 150 GSM Kraft Paper" class="w-full rounded-lg border-slate-300 text-sm" />
                 </div>
+
+                <!-- Option C: In-Form Media Photo Capture -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Bilti / Delivery Challan / Gate Photo (Optional)</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-dashed border-blue-200 bg-blue-50/40 hover:bg-blue-50 rounded-xl cursor-pointer text-xs font-semibold text-blue-700 transition-colors">
+                            <span class="material-symbols-outlined text-base">photo_camera</span>
+                            <span>Camera Snap</span>
+                            <input type="file" name="receipt_photo" accept="image/*" capture="environment" class="hidden" onchange="previewGatePhoto(this, 'gate-entry-preview')" />
+                        </label>
+                        <label class="flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer text-xs font-medium text-slate-700 transition-colors">
+                            <span class="material-symbols-outlined text-base">upload_file</span>
+                            <span>Upload File</span>
+                            <input type="file" name="receipt_photo" accept="image/*,.pdf" class="hidden" onchange="previewGatePhoto(this, 'gate-entry-preview')" />
+                        </label>
+                    </div>
+                    <div id="gate-entry-preview" class="hidden mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 items-center justify-between">
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+                            <span class="preview-filename font-medium truncate"></span>
+                        </div>
+                        <button type="button" onclick="clearGatePhoto('gate-entry-preview')" class="text-red-500 hover:text-red-700 text-sm font-bold ml-2">&times;</button>
+                    </div>
+                </div>
+
                 <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
                     <button type="button" onclick="closeModal('modal-gate-entry')" class="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-700">Cancel</button>
                     <button type="submit" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-sm font-medium">Log Vehicle Entry</button>
@@ -221,7 +253,7 @@
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
-            <form id="weigh-form" method="POST" class="mt-4 space-y-4">
+            <form id="weigh-form" method="POST" enctype="multipart/form-data" class="mt-4 space-y-4">
                 @csrf
                 <div>
                     <label class="block text-xs font-semibold text-slate-700 mb-1">Gross Weight (KG - Loaded)</label>
@@ -231,11 +263,71 @@
                     <label class="block text-xs font-semibold text-slate-700 mb-1">Tare Weight (KG - Empty Vehicle)</label>
                     <input type="number" step="0.1" name="tare_weight_kg" id="weigh-tare" required class="w-full rounded-lg border-slate-300 text-sm" />
                 </div>
+
+                <!-- Weighbridge Slip Camera Snap -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Weighbridge Scale Ticket Slip Photo</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center justify-center gap-1 px-2.5 py-1.5 border-2 border-dashed border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 rounded-xl cursor-pointer text-xs font-semibold text-emerald-700 transition-colors">
+                            <span class="material-symbols-outlined text-sm">photo_camera</span>
+                            <span>Snap Ticket</span>
+                            <input type="file" name="receipt_photo" accept="image/*" capture="environment" class="hidden" onchange="previewGatePhoto(this, 'weigh-preview')" />
+                        </label>
+                        <label class="flex items-center justify-center gap-1 px-2.5 py-1.5 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer text-xs font-medium text-slate-700 transition-colors">
+                            <span class="material-symbols-outlined text-sm">upload_file</span>
+                            <span>Upload File</span>
+                            <input type="file" name="receipt_photo" accept="image/*,.pdf" class="hidden" onchange="previewGatePhoto(this, 'weigh-preview')" />
+                        </label>
+                    </div>
+                    <div id="weigh-preview" class="hidden mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 items-center justify-between">
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+                            <span class="preview-filename font-medium truncate"></span>
+                        </div>
+                        <button type="button" onclick="clearGatePhoto('weigh-preview')" class="text-red-500 hover:text-red-700 text-sm font-bold ml-2">&times;</button>
+                    </div>
+                </div>
+
                 <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
                     <button type="button" onclick="closeModal('modal-weigh')" class="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-700">Cancel</button>
                     <button type="submit" class="px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium">Save & Mark Exited</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal: Gate Slip / Receipt Photo Viewer -->
+    <div id="modal-gate-viewer" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 max-w-2xl w-full p-5 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                    </div>
+                    <div>
+                        <h3 id="gate-modal-title" class="text-sm font-bold text-slate-900">Gate Slip / Challan Document</h3>
+                        <p id="gate-modal-subtitle" class="text-[11px] text-slate-500"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a id="gate-modal-download" href="#" target="_blank" download class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors" title="Download / Open Full">
+                        <span class="material-symbols-outlined text-[18px]">open_in_new</span>
+                    </a>
+                    <button type="button" onclick="closeModal('modal-gate-viewer')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined text-[18px]">close</span>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4 bg-slate-950/5 rounded-xl my-3 flex items-center justify-center overflow-auto flex-1 min-h-[300px]">
+                <img id="gate-modal-img" src="" alt="Gate Challan Photo" class="max-h-[60vh] max-w-full rounded-lg object-contain shadow-sm border border-slate-200" />
+            </div>
+            <div class="pt-2 flex justify-between items-center text-xs text-slate-500">
+                <a href="{{ route('media_vault.index') }}" class="text-blue-600 hover:underline font-semibold flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">perm_media</span>
+                    <span>View All Media in Central Vault</span>
+                </a>
+                <button type="button" onclick="closeModal('modal-gate-viewer')" class="px-4 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700">Close</button>
+            </div>
         </div>
     </div>
 @endsection
@@ -248,6 +340,39 @@
         document.getElementById('weigh-tare').value = tare;
         document.getElementById('weigh-form').action = '/gate-register/' + id + '/weigh-exit';
         openModal('modal-weigh');
+    }
+
+    function previewGatePhoto(input, containerId) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.querySelector('.preview-filename').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+                container.classList.remove('hidden');
+                container.classList.add('flex');
+            }
+        }
+    }
+
+    function clearGatePhoto(containerId) {
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.classList.add('hidden');
+            container.classList.remove('flex');
+            const form = container.closest('form');
+            if (form) {
+                const inputs = form.querySelectorAll('input[type="file"]');
+                inputs.forEach(i => i.value = '');
+            }
+        }
+    }
+
+    function viewGateReceipt(imgUrl, title, subtitle) {
+        document.getElementById('gate-modal-img').src = imgUrl;
+        document.getElementById('gate-modal-title').textContent = title || 'Gate Pass Challan';
+        document.getElementById('gate-modal-subtitle').textContent = subtitle || '';
+        document.getElementById('gate-modal-download').href = imgUrl;
+        openModal('modal-gate-viewer');
     }
 </script>
 @endpush

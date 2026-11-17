@@ -94,7 +94,19 @@
                                     <span>{{ $entry->voucher->voucher_number ?? 'OPENING' }}</span>
                                 @endif
                             </td>
-                            <td class="py-4 px-5 text-slate-800">{{ $entry->narration }}</td>
+                            <td class="py-4 px-5 text-slate-800">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>{{ $entry->narration }}</span>
+                                    @if(!empty($entry->voucher?->receipt_photo_path))
+                                        <a href="{{ asset($entry->voucher->receipt_photo_path) }}" target="_blank"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-[10px] font-semibold whitespace-nowrap shadow-xs"
+                                            title="View Receipt Photo">
+                                            <span class="material-symbols-outlined text-[13px]">image</span>
+                                            <span>Slip</span>
+                                        </a>
+                                    @endif
+                                </div>
+                            </td>
                             <td class="py-4 px-5 text-right num-tabular font-medium text-slate-900">
                                 {{ $entry->debit > 0 ? 'Rs. ' . number_format($entry->debit) : '-' }}
                             </td>
@@ -125,7 +137,7 @@
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
-            <form action="{{ route('khata.voucher.store') }}" method="POST" class="mt-4 space-y-4">
+            <form action="{{ route('khata.voucher.store') }}" method="POST" enctype="multipart/form-data" class="mt-4 space-y-4">
                 @csrf
                 <input type="hidden" name="party_id" value="{{ $party->id }}" />
                 <div>
@@ -163,6 +175,31 @@
                     <label class="block text-xs font-semibold text-slate-700 mb-1">Narration / Description</label>
                     <input type="text" name="description" required placeholder="Enter transaction note..." class="w-full rounded-lg border-slate-300 text-sm" />
                 </div>
+
+                <!-- Option C: In-Form Media Photo Capture -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Cheque / Bank Slip / Bill Photo (Optional)</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-dashed border-blue-200 bg-blue-50/40 hover:bg-blue-50 rounded-xl cursor-pointer text-xs font-semibold text-blue-700 transition-colors">
+                            <span class="material-symbols-outlined text-base">photo_camera</span>
+                            <span>Camera Snap</span>
+                            <input type="file" name="receipt_photo" accept="image/*" capture="environment" class="hidden" onchange="previewShowPhoto(this)" />
+                        </label>
+                        <label class="flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer text-xs font-medium text-slate-700 transition-colors">
+                            <span class="material-symbols-outlined text-base">upload_file</span>
+                            <span>Upload File</span>
+                            <input type="file" name="receipt_photo" accept="image/*,.pdf" class="hidden" onchange="previewShowPhoto(this)" />
+                        </label>
+                    </div>
+                    <div id="show-preview-box" class="hidden mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 items-center justify-between">
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+                            <span id="show-preview-filename" class="font-medium truncate"></span>
+                        </div>
+                        <button type="button" onclick="clearShowPhoto()" class="text-red-500 hover:text-red-700 text-sm font-bold ml-2">&times;</button>
+                    </div>
+                </div>
+
                 <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
                     <button type="button" onclick="closeModal('modal-party-voucher')" class="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-700">Cancel</button>
                     <button type="submit" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-sm font-medium">Post to Khata</button>
@@ -171,4 +208,34 @@
         </div>
     </div>
 @endsection
+
+@push('scripts')
+<script>
+function previewShowPhoto(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const box = document.getElementById('show-preview-box');
+        const filename = document.getElementById('show-preview-filename');
+        if (box && filename) {
+            filename.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+            box.classList.remove('hidden');
+            box.classList.add('flex');
+        }
+    }
+}
+
+function clearShowPhoto() {
+    const box = document.getElementById('show-preview-box');
+    if (box) {
+        box.classList.add('hidden');
+        box.classList.remove('flex');
+        const form = box.closest('form');
+        if (form) {
+            const inputs = form.querySelectorAll('input[type="file"]');
+            inputs.forEach(i => i.value = '');
+        }
+    }
+}
+</script>
+@endpush
 

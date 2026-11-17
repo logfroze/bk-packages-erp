@@ -27,6 +27,7 @@ class GateRegister extends Model
         'time_in',
         'time_out',
         'security_officer',
+        'receipt_photo_path',
     ];
 
     protected $casts = [
