@@ -37,6 +37,7 @@ class SettingController extends Controller
             'padding' => (int) $validated['padding'],
             'suffix' => $validated['suffix'] ? trim($validated['suffix']) : null,
         ]);
+        \Illuminate\Support\Facades\Cache::forget("doc_seq_{$validated['document_type']}");
 
         return back()->with('success', "{$validated['document_type']} numbering format updated successfully (Next: " . DocumentSequence::previewNextNumber($validated['document_type']) . ").");
     }

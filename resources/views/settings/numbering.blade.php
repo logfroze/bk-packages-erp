@@ -59,7 +59,7 @@
         @foreach($docs as $type => $info)
             @php
                 $seq = $sequences[$type];
-                $preview = \App\Models\DocumentSequence::previewNextNumber($type);
+                $preview = $seq->preview();
             @endphp
             <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
                 <div>

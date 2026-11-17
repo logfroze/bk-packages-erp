@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class DocumentSequence extends Model
 {
@@ -26,34 +27,42 @@ class DocumentSequence extends Model
 
     public static function getOrCreateSequence(string $documentType): self
     {
-        $defaults = self::defaultPrefixes();
-        $prefix = $defaults[$documentType] ?? substr($documentType, 0, 3);
+        return Cache::remember("doc_seq_{$documentType}", 10, function () use ($documentType) {
+            $defaults = self::defaultPrefixes();
+            $prefix = $defaults[$documentType] ?? substr($documentType, 0, 3);
 
-        return self::firstOrCreate(
-            ['document_type' => $documentType],
-            [
-                'prefix' => $prefix,
-                'next_number' => 1,
-                'padding' => 4,
-                'is_active' => true,
-            ]
-        );
+            return self::firstOrCreate(
+                ['document_type' => $documentType],
+                [
+                    'prefix' => $prefix,
+                    'next_number' => 1,
+                    'padding' => 4,
+                    'is_active' => true,
+                ]
+            );
+        });
+    }
+
+    public function preview(): string
+    {
+        $num = str_pad((string) $this->next_number, (int) $this->padding, '0', STR_PAD_LEFT);
+        $suffix = $this->suffix ? '-' . $this->suffix : '';
+
+        return "{$this->prefix}-{$num}{$suffix}";
     }
 
     public static function previewNextNumber(string $documentType): string
     {
         $seq = self::getOrCreateSequence($documentType);
-        $num = str_pad((string) $seq->next_number, $seq->padding, '0', STR_PAD_LEFT);
-        $suffix = $seq->suffix ? '-' . $seq->suffix : '';
-
-        return "{$seq->prefix}-{$num}{$suffix}";
+        return $seq->preview();
     }
 
     public static function generateNextNumber(string $documentType): string
     {
         $seq = self::getOrCreateSequence($documentType);
-        $formatted = self::previewNextNumber($documentType);
+        $formatted = $seq->preview();
         $seq->increment('next_number');
+        Cache::forget("doc_seq_{$documentType}");
 
         return $formatted;
     }
