@@ -81,6 +81,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
         Route::post('/attendance', [AttendanceController::class, 'save'])->name('attendance.save');
         Route::get('/attendance/weekly', [AttendanceController::class, 'weeklySheet'])->name('attendance.weekly');
+        Route::get('/attendance/weekly-sheet', [AttendanceController::class, 'weeklySheet']);
         Route::get('/attendance/weekly/print', [AttendanceController::class, 'printWeeklySheet'])->name('attendance.weekly.print');
         Route::post('/attendance/worker', [AttendanceController::class, 'storeWorker'])->name('attendance.worker.store');
         Route::post('/attendance/worker/{worker}/update', [AttendanceController::class, 'updateWorker'])->name('attendance.worker.update');
