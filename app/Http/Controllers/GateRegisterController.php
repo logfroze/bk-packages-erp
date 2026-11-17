@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CartonProduct;
+use App\Models\DocumentSequence;
 use App\Models\GateRegister;
 use App\Models\Party;
 use App\Models\PartyLedgerEntry;
@@ -39,12 +40,17 @@ class GateRegisterController extends Controller
             'boxes_dispatched' => GateRegister::where('movement_type', 'OUTWARD_DISPATCH')->whereDate('time_in', today())->sum('total_pieces'),
         ];
 
-        return view('gate.index', compact('entries', 'parties', 'cartons', 'filter', 'stats'));
+        $previewGatePass = DocumentSequence::previewNextNumber('GATE_PASS');
+        $previewChallan = DocumentSequence::previewNextNumber('DELIVERY_CHALLAN');
+        $previewInvoice = DocumentSequence::previewNextNumber('SALES_INVOICE');
+
+        return view('gate.index', compact('entries', 'parties', 'cartons', 'filter', 'stats', 'previewGatePass', 'previewChallan', 'previewInvoice'));
     }
 
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
+            'gate_pass_number' => 'nullable|string|max:50',
             'movement_type' => 'required|in:INWARD_RAW_MATERIAL,OUTWARD_DISPATCH,GENERAL',
             'vehicle_number' => 'required|string|max:50',
             'vehicle_type' => 'nullable|string|max:50',
@@ -58,12 +64,18 @@ class GateRegisterController extends Controller
             'total_pieces' => 'nullable|integer|min:0',
             'total_bundles' => 'nullable|integer|min:0',
             'bilti_challan_number' => 'nullable|string|max:80',
+            'invoice_number' => 'nullable|string|max:50',
             'create_invoice' => 'nullable|boolean',
         ]);
 
         DB::transaction(function () use ($validated, $request) {
-            $lastId = GateRegister::max('id') ?? 0;
-            $gpNumber = 'GP-' . (4091 + $lastId);
+            $gpNumber = !empty($validated['gate_pass_number'])
+                ? trim($validated['gate_pass_number'])
+                : DocumentSequence::generateNextNumber('GATE_PASS');
+
+            $challanNumber = !empty($validated['bilti_challan_number'])
+                ? trim($validated['bilti_challan_number'])
+                : DocumentSequence::generateNextNumber('DELIVERY_CHALLAN');
 
             $gross = $validated['gross_weight_kg'] ?? null;
             $tare = $validated['tare_weight_kg'] ?? null;
@@ -86,7 +98,7 @@ class GateRegisterController extends Controller
                 'driver_name' => $validated['driver_name'],
                 'driver_phone' => $validated['driver_phone'] ?? null,
                 'party_id' => $validated['party_id'],
-                'bilti_challan_number' => $validated['bilti_challan_number'] ?? ('BLT-' . rand(1000, 9999)),
+                'bilti_challan_number' => $challanNumber,
                 'material_summary' => $materialSummary,
                 'gross_weight_kg' => $gross,
                 'tare_weight_kg' => $tare,
@@ -106,8 +118,9 @@ class GateRegisterController extends Controller
                 if ($request->boolean('create_invoice') && $carton->unit_selling_price > 0) {
                     $amount = $pieces * $carton->unit_selling_price;
                     $party = Party::findOrFail($validated['party_id']);
-                    $vCount = Voucher::max('id') ?? 0;
-                    $vNumber = 'INV-' . (8921 + $vCount);
+                    $vNumber = !empty($validated['invoice_number'])
+                        ? trim($validated['invoice_number'])
+                        : DocumentSequence::generateNextNumber('SALES_INVOICE');
 
                     $voucher = Voucher::create([
                         'voucher_number' => $vNumber,

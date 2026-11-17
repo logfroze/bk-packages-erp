@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CartonProduct;
 use App\Models\PaperReel;
 use App\Models\Party;
+use App\Models\PrintedTopSheet;
 use App\Models\RawMaterial;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,19 +17,41 @@ class InventoryController extends Controller
     public function index(Request $request): View
     {
         $tab = $request->get('tab', 'cartons');
+
+        // Eager load with client party to eliminate N+1 latency
         $cartons = CartonProduct::with('client')->orderBy('box_title')->get();
+        $cartonsByParty = $cartons->groupBy(fn($c) => $c->client?->name ?? 'Unassigned Client');
+
         $rawMaterials = RawMaterial::orderBy('name')->get();
         $paperReels = PaperReel::with(['rawMaterial', 'supplier'])->latest()->get();
+        $totalReelsKg = $paperReels->sum('remaining_weight_kg');
+        $reelsByDeckle = $paperReels->groupBy(fn($r) => (string) ($r->deckle_size_inches ?: '33.0'));
+
+        $printedTopSheets = PrintedTopSheet::with(['cartonProduct', 'supplier'])->orderBy('item_name')->get();
+        $totalTopSheetsPieces = $printedTopSheets->sum('stock_pieces');
+
         $customers = Party::where('type', 'CUSTOMER')->orderBy('name')->get();
-        $suppliers = Party::where('type', 'SUPPLIER')->orderBy('name')->get();
+        $suppliers = Party::where('type', 'SUPPLIER')->orWhere('classification', 'PAPER_MILL')->orderBy('name')->get();
+
+        $deckleSizes = PaperReel::availableDeckleSizes();
+        $paperGrades = PaperReel::availablePaperGrades();
+        $sourcingCities = ['Faisalabad', 'Multan', 'Lahore', 'Rahim Yar Khan', 'Jumber'];
 
         return view('inventory.index', compact(
             'tab',
             'cartons',
+            'cartonsByParty',
             'rawMaterials',
             'paperReels',
+            'totalReelsKg',
+            'reelsByDeckle',
+            'printedTopSheets',
+            'totalTopSheetsPieces',
             'customers',
-            'suppliers'
+            'suppliers',
+            'deckleSizes',
+            'paperGrades',
+            'sourcingCities'
         ));
     }
 
@@ -38,14 +61,18 @@ class InventoryController extends Controller
             'reel_number' => 'required|string|unique:paper_reels,reel_number',
             'raw_material_id' => 'required|exists:raw_materials,id',
             'supplier_id' => 'nullable|exists:parties,id',
+            'paper_grade' => 'nullable|string|in:TESTLINER,SUPER_FLUTING,CMP_ULTRA',
+            'deckle_size_inches' => 'nullable|numeric|min:15|max:50',
             'initial_weight_kg' => 'required|numeric|min:1',
         ]);
 
         DB::transaction(function () use ($validated) {
             PaperReel::create([
-                'reel_number' => strtoupper($validated['reel_number']),
+                'reel_number' => strtoupper(trim($validated['reel_number'])),
                 'raw_material_id' => $validated['raw_material_id'],
                 'supplier_id' => $validated['supplier_id'] ?? null,
+                'paper_grade' => $validated['paper_grade'] ?? 'TESTLINER',
+                'deckle_size_inches' => $validated['deckle_size_inches'] ?? 33.0,
                 'initial_weight_kg' => $validated['initial_weight_kg'],
                 'remaining_weight_kg' => $validated['initial_weight_kg'],
                 'received_date' => now(),
@@ -57,7 +84,7 @@ class InventoryController extends Controller
         });
 
         return redirect()->route('inventory.index', ['tab' => 'reels'])
-            ->with('success', "Paper Reel {$validated['reel_number']} ({$validated['initial_weight_kg']} kg) added to stock.");
+            ->with('success', "Paper Reel {$validated['reel_number']} ({$validated['initial_weight_kg']} kg) added to stock in KG.");
     }
 
     public function storeCarton(Request $request): RedirectResponse
@@ -85,5 +112,68 @@ class InventoryController extends Controller
 
         return redirect()->route('inventory.index', ['tab' => 'cartons'])
             ->with('success', "New carton specification '{$validated['box_title']}' created.");
+    }
+
+    public function storeTopSheet(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'item_name' => 'required|string|max:255',
+            'carton_product_id' => 'nullable|exists:carton_products,id',
+            'supplier_id' => 'nullable|exists:parties,id',
+            'sourcing_city' => 'required|string|max:100',
+            'stock_pieces' => 'required|integer|min:0',
+            'minimum_threshold' => 'nullable|integer|min:0',
+            'unit_cost' => 'nullable|numeric|min:0',
+            'location' => 'nullable|string|max:100',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $count = PrintedTopSheet::count() + 1;
+        $code = 'TS-' . str_pad((string) $count, 4, '0', STR_PAD_LEFT);
+
+        PrintedTopSheet::create([
+            'item_code' => $code,
+            'item_name' => trim($validated['item_name']),
+            'carton_product_id' => $validated['carton_product_id'] ?? null,
+            'supplier_id' => $validated['supplier_id'] ?? null,
+            'sourcing_city' => $validated['sourcing_city'],
+            'stock_pieces' => (int) $validated['stock_pieces'],
+            'minimum_threshold' => $validated['minimum_threshold'] ?? 500,
+            'unit_cost' => $validated['unit_cost'] ?? 0.00,
+            'location' => $validated['location'] ?? 'Top Sheet Bay 1',
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        return redirect()->route('inventory.index', ['tab' => 'top-sheets'])
+            ->with('success', "Pre-Printed Top Sheet '{$validated['item_name']}' added ({$validated['stock_pieces']} Pcs).");
+    }
+
+    public function adjustTopSheetStock(Request $request, PrintedTopSheet $topSheet): RedirectResponse
+    {
+        $validated = $request->validate([
+            'adjustment_type' => 'required|in:ADD,SUBTRACT,SET',
+            'pieces' => 'required|integer|min:0',
+            'notes' => 'nullable|string|max:255',
+        ]);
+
+        $qty = (int) $validated['pieces'];
+        $old = $topSheet->stock_pieces;
+        $new = $old;
+
+        if ($validated['adjustment_type'] === 'ADD') {
+            $new = $old + $qty;
+        } elseif ($validated['adjustment_type'] === 'SUBTRACT') {
+            $new = max(0, $old - $qty);
+        } else {
+            $new = $qty;
+        }
+
+        $topSheet->update([
+            'stock_pieces' => $new,
+            'notes' => $validated['notes'] ? $topSheet->notes . ' | ' . $validated['notes'] : $topSheet->notes,
+        ]);
+
+        return redirect()->route('inventory.index', ['tab' => 'top-sheets'])
+            ->with('success', "Top Sheet '{$topSheet->item_name}' stock updated: {$old} -> {$new} Pcs.");
     }
 }

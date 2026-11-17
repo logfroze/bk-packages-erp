@@ -6,10 +6,13 @@ use App\Models\CartonProduct;
 use App\Models\ConversionRun;
 use App\Models\ConversionSheetCut;
 use App\Models\DailyAttendance;
+use App\Models\DocumentSequence;
 use App\Models\GateRegister;
 use App\Models\PaperReel;
 use App\Models\Party;
 use App\Models\PartyLedgerEntry;
+use App\Models\PettyCashTransaction;
+use App\Models\PrintedTopSheet;
 use App\Models\ProductionBatch;
 use App\Models\RawMaterial;
 use App\Models\User;
@@ -511,6 +514,71 @@ class DatabaseSeeder extends Seeder
                 'actual_sheets_cut' => 3940,
                 'waste_sheets' => 60,
             ]);
+        }
+
+        // 8. Document Numbering Initial Sequences
+        DocumentSequence::getOrCreateSequence('DELIVERY_CHALLAN');
+        DocumentSequence::getOrCreateSequence('GATE_PASS');
+        DocumentSequence::getOrCreateSequence('SALES_INVOICE');
+
+        // 9. Local Vendor Shops (Okara Local Market)
+        Party::updateOrCreate(
+            ['code' => 'VND-ALMADINA'],
+            [
+                'name' => 'Al-Madina Hardware & Tools',
+                'type' => 'SUPPLIER',
+                'classification' => 'LOCAL_VENDOR_SHOP',
+                'vendor_category' => 'Hardware & Tools',
+                'contact_person' => 'Haji Muhammad Aslam',
+                'phone' => '0300-7981122',
+                'address' => 'Railway Road, Okara',
+                'city' => 'Okara',
+                'opening_balance' => -45000.00,
+                'current_balance' => -45000.00,
+            ]
+        );
+
+        Party::updateOrCreate(
+            ['code' => 'VND-SHELL-OKARA'],
+            [
+                'name' => 'Bismillah Petroleum Service (Shell)',
+                'type' => 'SUPPLIER',
+                'classification' => 'LOCAL_VENDOR_SHOP',
+                'vendor_category' => 'Diesel & Petrol Pump',
+                'contact_person' => 'Chaudhry Waqas',
+                'phone' => '0321-4455667',
+                'address' => 'Faisalabad Road Bypass, Okara',
+                'city' => 'Okara',
+                'opening_balance' => -120000.00,
+                'current_balance' => -120000.00,
+            ]
+        );
+
+        // 10. Pre-Printed Top Sheets (Outsourced Flexo Printing)
+        PrintedTopSheet::updateOrCreate(
+            ['item_code' => 'TS-0001'],
+            [
+                'item_name' => 'Ahmed Ghee 16L Flexo Outer Top Sheet',
+                'carton_product_id' => $ghee16L->id,
+                'sourcing_city' => 'Faisalabad',
+                'stock_pieces' => 8500,
+                'minimum_threshold' => 1000,
+                'unit_cost' => 12.50,
+                'location' => 'Shed Bay 2',
+            ]
+        );
+
+        // 11. Initial Factory Safe Petty Cash
+        if (PettyCashTransaction::count() === 0) {
+            PettyCashTransaction::record(
+                'CASH_IN',
+                'OPENING_FLOAT',
+                50000.00,
+                'Factory Office Safe Opening Float deposited by Director',
+                'Manzoor Ali (Director)',
+                null,
+                'Mirza Sohail'
+            );
         }
     }
 }

@@ -222,10 +222,13 @@
       '/khata/voucher': 'Khata / Voucher Entry',
       '/khata/party': 'New Party Account',
       '/attendance': 'Daily Worker Attendance',
-      '/attendance/worker': 'New Worker Profile',
+      '/attendance/worker': 'Worker Profile',
       '/attendance/advance': 'Worker Cash Advance',
       '/inventory/reels': 'Paper Reel Stock',
-      '/inventory/cartons': 'Carton Specification'
+      '/inventory/cartons': 'Carton Specification',
+      '/inventory/top-sheets': 'Pre-Printed Top Sheet',
+      '/petty-cash': 'Petty Cash Transaction',
+      '/settings/numbering': 'Document Numbering'
     };
     const path = new URL(actionUrl, window.location.origin).pathname;
     const labelText = labelMap[path] || 'Factory Record';
@@ -255,6 +258,7 @@
 
   // Expose helper to UI
   window.BKOffline = {
+    updateUI: updateNetworkStatusUI,
     syncNow: () => syncOfflineQueue(true),
     clearErrors: async () => {
       await db.sync_queue.where('status').equals('ERROR').delete();

@@ -4,8 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\ConversionRun;
 use App\Models\GateRegister;
+use App\Models\Party;
+use App\Models\PrintedTopSheet;
 use App\Models\ProductionBatch;
 use App\Models\SyncLog;
+use App\Models\Worker;
+use App\Models\WorkerAdvance;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +48,7 @@ class OfflineSyncController extends Controller
 
         // Enforce RBAC on offline sync replay for financial/admin endpoints
         $isGatePath = $path === '/gate-register' || preg_match('#^/gate-register/\d+/weigh-exit$#', $path);
-        if (! $isGatePath && ! $request->user()?->isFinancialAuthorized()) {
+        if (!$isGatePath && !$request->user()?->isFinancialAuthorized()) {
             return response()->json([
                 'status' => 'forbidden',
                 'message' => 'Unauthorized offline action for current user role.',
@@ -74,6 +78,11 @@ class OfflineSyncController extends Controller
                     app(InventoryController::class)->storeReel($subRequest);
                 } elseif ($path === '/inventory/cartons') {
                     app(InventoryController::class)->storeCarton($subRequest);
+                } elseif ($path === '/inventory/top-sheets') {
+                    app(InventoryController::class)->storeTopSheet($subRequest);
+                } elseif (preg_match('#^/inventory/top-sheets/(\d+)/adjust$#', $path, $m)) {
+                    $sheet = PrintedTopSheet::findOrFail($m[1]);
+                    app(InventoryController::class)->adjustTopSheetStock($subRequest, $sheet);
                 } elseif ($path === '/gate-register') {
                     app(GateRegisterController::class)->store($subRequest);
                 } elseif (preg_match('#^/gate-register/(\d+)/weigh-exit$#', $path, $m)) {
@@ -81,14 +90,30 @@ class OfflineSyncController extends Controller
                     app(GateRegisterController::class)->updateWeightAndExit($subRequest, $gate);
                 } elseif ($path === '/khata/party') {
                     app(KhataController::class)->storeParty($subRequest);
+                } elseif (preg_match('#^/khata/party/(\d+)/update$#', $path, $m)) {
+                    $party = Party::findOrFail($m[1]);
+                    app(KhataController::class)->updateParty($subRequest, $party);
+                } elseif (preg_match('#^/khata/party/(\d+)/adjust$#', $path, $m)) {
+                    $party = Party::findOrFail($m[1]);
+                    app(KhataController::class)->adjustBalance($subRequest, $party);
                 } elseif ($path === '/khata/voucher') {
                     app(KhataController::class)->storeVoucher($subRequest);
                 } elseif ($path === '/attendance') {
                     app(AttendanceController::class)->save($subRequest);
                 } elseif ($path === '/attendance/worker') {
                     app(AttendanceController::class)->storeWorker($subRequest);
+                } elseif (preg_match('#^/attendance/worker/(\d+)/update$#', $path, $m)) {
+                    $worker = Worker::findOrFail($m[1]);
+                    app(AttendanceController::class)->updateWorker($subRequest, $worker);
                 } elseif ($path === '/attendance/advance') {
                     app(AttendanceController::class)->storeAdvance($subRequest);
+                } elseif (preg_match('#^/attendance/advance/(\d+)/settle$#', $path, $m)) {
+                    $adv = WorkerAdvance::findOrFail($m[1]);
+                    app(AttendanceController::class)->settleAdvance($adv);
+                } elseif ($path === '/petty-cash') {
+                    app(PettyCashController::class)->store($subRequest);
+                } elseif ($path === '/settings/numbering') {
+                    app(SettingController::class)->updateNumbering($subRequest);
                 } else {
                     throw new \InvalidArgumentException("Unsupported offline sync path: {$path}");
                 }
@@ -120,4 +145,3 @@ class OfflineSyncController extends Controller
         ]);
     }
 }
-

@@ -15,6 +15,8 @@ class Worker extends Model
         'phone',
         'role',
         'wage_type',
+        'standard_hours_per_day',
+        'overtime_rate_per_hour',
         'rate_amount',
         'is_active',
         'joined_date',

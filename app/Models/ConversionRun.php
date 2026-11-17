@@ -20,6 +20,9 @@ class ConversionRun extends Model
         'reel_2_id',
         'reel_2_used_kg',
         'reel_2_rolls_produced',
+        'reel_3_id',
+        'reel_3_used_kg',
+        'reel_3_rolls_produced',
         'total_rolls_produced',
         'rolls_remaining',
         'stage1_loss_kg',
@@ -28,6 +31,8 @@ class ConversionRun extends Model
         'actual_sheets_cut',
         'sheets_remaining',
         'stage2_loss_sheets',
+        'top_sheet_id',
+        'top_sheets_used',
         'sheets_used_for_cartons',
         'sheets_per_carton_rule',
         'expected_cartons',
@@ -63,6 +68,16 @@ class ConversionRun extends Model
     public function reel2(): BelongsTo
     {
         return $this->belongsTo(PaperReel::class, 'reel_2_id');
+    }
+
+    public function reel3(): BelongsTo
+    {
+        return $this->belongsTo(PaperReel::class, 'reel_3_id');
+    }
+
+    public function topSheet(): BelongsTo
+    {
+        return $this->belongsTo(PrintedTopSheet::class, 'top_sheet_id');
     }
 
     public function sheetCuts(): HasMany

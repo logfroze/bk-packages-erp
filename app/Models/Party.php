@@ -11,6 +11,8 @@ class Party extends Model
         'code',
         'name',
         'type',
+        'classification',
+        'vendor_category',
         'contact_person',
         'phone',
         'address',

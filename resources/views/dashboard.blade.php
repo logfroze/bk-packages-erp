@@ -288,6 +288,10 @@
             </div>
             <form action="{{ route('gate.store') }}" method="POST" class="mt-4 space-y-4">
                 @csrf
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                    <span class="text-slate-600">Auto Gate Pass #: <strong class="text-navy-900 font-mono">{{ $previewGatePass ?? \App\Models\DocumentSequence::previewNextNumber('GATE_PASS') }}</strong></span>
+                    <input type="text" name="gate_pass_number" placeholder="Override # (optional)" class="w-40 rounded-md border-slate-300 text-xs py-1 uppercase font-mono" />
+                </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 mb-1">Movement Type</label>
@@ -399,6 +403,10 @@
             <form action="{{ route('gate.store') }}" method="POST" class="mt-4 space-y-4">
                 @csrf
                 <input type="hidden" name="movement_type" value="OUTWARD_DISPATCH" />
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                    <span class="text-slate-600">Auto Delivery Challan #: <strong class="text-navy-900 font-mono">{{ $previewChallan ?? \App\Models\DocumentSequence::previewNextNumber('DELIVERY_CHALLAN') }}</strong></span>
+                    <input type="text" name="bilti_challan_number" placeholder="Override # (optional)" class="w-40 rounded-md border-slate-300 text-xs py-1 uppercase font-mono" />
+                </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 mb-1">Client Party</label>

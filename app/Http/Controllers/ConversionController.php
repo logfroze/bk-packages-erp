@@ -7,6 +7,7 @@ use App\Models\ConversionRun;
 use App\Models\ConversionSheetCut;
 use App\Models\PaperReel;
 use App\Models\Party;
+use App\Models\PrintedTopSheet;
 use App\Models\RawMaterial;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,11 +23,13 @@ class ConversionController extends Controller
             'cartonProduct',
             'reel1.rawMaterial',
             'reel2.rawMaterial',
+            'reel3.rawMaterial',
+            'topSheet',
             'sheetCuts',
         ])->latest()->get();
 
         $summary = [
-            'reels_used_kg' => $runs->sum('reel_1_used_kg') + $runs->sum('reel_2_used_kg'),
+            'reels_used_kg' => $runs->sum('reel_1_used_kg') + $runs->sum('reel_2_used_kg') + $runs->sum('reel_3_used_kg'),
             'rolls_produced' => $runs->sum('total_rolls_produced'),
             'sheets_cut' => $runs->sum('actual_sheets_cut'),
             'cartons_made' => $runs->sum('actual_cartons_produced'),
@@ -39,13 +42,15 @@ class ConversionController extends Controller
 
         $cartonProducts = CartonProduct::with('client')->orderBy('box_title')->get();
         $customers = Party::where('type', 'CUSTOMER')->orderBy('name')->get();
+        $printedTopSheets = PrintedTopSheet::where('stock_pieces', '>', 0)->orderBy('item_name')->get();
 
         return view('production.conversion', compact(
             'runs',
             'summary',
             'paperReels',
             'cartonProducts',
-            'customers'
+            'customers',
+            'printedTopSheets'
         ));
     }
 
@@ -61,6 +66,9 @@ class ConversionController extends Controller
             'reel_2_id' => 'nullable|exists:paper_reels,id',
             'reel_2_used_kg' => 'nullable|numeric|min:0',
             'reel_2_rolls_produced' => 'nullable|integer|min:0',
+            'reel_3_id' => 'nullable|exists:paper_reels,id',
+            'reel_3_used_kg' => 'nullable|numeric|min:0',
+            'reel_3_rolls_produced' => 'nullable|integer|min:0',
             'stage1_loss_kg' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -90,10 +98,16 @@ class ConversionController extends Controller
             $r2Id = !empty($validated['reel_2_id']) ? (int) $validated['reel_2_id'] : null;
             $r2Kg = $r2Id ? (float) ($validated['reel_2_used_kg'] ?? 0) : 0.0;
             $r2Rolls = $r2Id ? (int) ($validated['reel_2_rolls_produced'] ?? 0) : 0;
+            $r3Id = !empty($validated['reel_3_id']) ? (int) $validated['reel_3_id'] : null;
+            $r3Kg = $r3Id ? (float) ($validated['reel_3_used_kg'] ?? 0) : 0.0;
+            $r3Rolls = $r3Id ? (int) ($validated['reel_3_rolls_produced'] ?? 0) : 0;
 
             $deductReel((int) $validated['reel_1_id'], $r1Kg);
             if ($r2Id) {
                 $deductReel($r2Id, $r2Kg);
+            }
+            if ($r3Id) {
+                $deductReel($r3Id, $r3Kg);
             }
 
             $clientId = $validated['client_id'] ?? null;
@@ -101,7 +115,7 @@ class ConversionController extends Controller
                 $clientId = CartonProduct::find($validated['carton_product_id'])?->client_id;
             }
 
-            $totalRolls = $r1Rolls + $r2Rolls;
+            $totalRolls = $r1Rolls + $r2Rolls + $r3Rolls;
             $lastId = ConversionRun::max('id') ?? 0;
             $runCode = 'CONV-' . (1001 + $lastId);
 
@@ -117,6 +131,9 @@ class ConversionController extends Controller
                 'reel_2_id' => $r2Id,
                 'reel_2_used_kg' => $r2Kg,
                 'reel_2_rolls_produced' => $r2Rolls,
+                'reel_3_id' => $r3Id,
+                'reel_3_used_kg' => $r3Kg,
+                'reel_3_rolls_produced' => $r3Rolls,
                 'total_rolls_produced' => $totalRolls,
                 'rolls_remaining' => $totalRolls,
                 'stage1_loss_kg' => (float) ($validated['stage1_loss_kg'] ?? 0),
@@ -125,7 +142,7 @@ class ConversionController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Stage 1 (Reel → Roll) recorded and raw paper reel weights updated.');
+        return back()->with('success', 'Stage 1 (Reel → Roll) recorded and raw paper reel weights in KG updated.');
     }
 
     public function storeSheetCut(Request $request, ConversionRun $run): RedirectResponse

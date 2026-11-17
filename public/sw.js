@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bk-packages-erp-v3';
+const CACHE_NAME = 'bk-packages-erp-v4';
 
 const APP_SHELL_URLS = [
   '/',
@@ -8,9 +8,13 @@ const APP_SHELL_URLS = [
   '/gate-register',
   '/khata',
   '/attendance',
+  '/attendance/weekly',
+  '/petty-cash',
+  '/settings/numbering',
   '/reports',
   '/manifest.json',
   '/icons/icon.svg',
+  '/js/fast-nav.js',
   '/js/offline-sync.js',
   '/js/ai-copilot.js'
 ];
@@ -30,7 +34,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: Clean up old caches
+// Activate: Clean up older cache versions immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -39,15 +43,19 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: Network-first for HTML pages, Cache-first for external CDNs & static assets
+// Fetch Strategy:
+// 1. Static CDNs & Assets -> Cache-first with background revalidation
+// 2. Application HTML Pages -> Stale-While-Revalidate (Instant 0ms display + background fresh data fetch)
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+
+  // Skip offline-sync ping & replay from caching
   if (url.pathname.startsWith('/offline-sync')) return;
 
-  // Static CDN & Asset requests -> Cache-first with background refresh
+  // Static CDN & Asset requests -> Cache-first
   if (
     url.origin !== self.location.origin ||
     url.pathname.startsWith('/js/') ||
@@ -70,22 +78,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Application Pages -> Network-first, falling back to cached page if offline
+  // Application Pages -> Stale-While-Revalidate (0ms instantaneous cached load + silent background refresh)
   event.respondWith(
-    fetch(req)
-      .then((networkRes) => {
-        if (networkRes && networkRes.ok) {
-          const copy = networkRes.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-        }
-        return networkRes;
-      })
-      .catch(() => {
-        return caches.match(req).then((cached) => {
-          if (cached) return cached;
+    caches.match(req).then((cachedResponse) => {
+      const fetchPromise = fetch(req)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.ok) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // If offline and request wasn't cached, try fallback to dashboard
+          if (cachedResponse) return cachedResponse;
           return caches.match('/');
         });
-      })
+
+      // If cached response exists, return it immediately for 0ms load!
+      // The fetchPromise runs in the background to update the cache for next view.
+      return cachedResponse || fetchPromise;
+    })
   );
 });
-
