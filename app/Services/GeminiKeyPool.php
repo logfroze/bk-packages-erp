@@ -60,8 +60,8 @@ class GeminiKeyPool
         string $systemInstruction,
         bool $expectJson = true
     ): ?string {
-        $primaryModel = env('GEMINI_MODEL', 'gemini-3.5-flash-lite');
-        $models = array_values(array_unique([$primaryModel, 'gemini-3.1-flash-lite', 'gemini-flash-latest']));
+        $primaryModel = env('GEMINI_MODEL', 'gemini-3-flash-preview');
+        $models = array_values(array_unique([$primaryModel, 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview']));
 
         return self::executeWithFailover(function (string $key) use ($models, $contents, $systemInstruction, $expectJson) {
             $lastError = null;
@@ -87,10 +87,17 @@ class GeminiKeyPool
                     'generationConfig' => $generationConfig,
                 ];
 
-                $response = Http::timeout(18)->post($url, $body);
-
-                if ($response->status() === 429) {
-                    throw new \RuntimeException('Gemini rate limit (429) reached.');
+                try {
+                    $response = Http::withoutVerifying()
+                        ->withOptions([
+                            'force_ip_resolve' => 'v4',
+                            'connect_timeout' => 6,
+                        ])
+                        ->timeout(14)
+                        ->post($url, $body);
+                } catch (\Throwable $e) {
+                    $lastError = "Network error ({$model}): " . $e->getMessage();
+                    continue;
                 }
 
                 if ($response->successful()) {
@@ -103,10 +110,12 @@ class GeminiKeyPool
                 $errMsg = $response->json('error.message') ?? substr($response->body(), 0, 200);
                 $lastError = "HTTP {$response->status()} ({$model}): {$errMsg}";
 
-                // Retry next fallback model only on transient 503/404 model unavailability
-                if (! in_array($response->status(), [404, 503], true)) {
-                    throw new \RuntimeException("Gemini API error: {$lastError}");
+                // Retry next fallback model on 404 (not found), 429 (rate limit), or 503 (high demand)
+                if (in_array($response->status(), [404, 429, 503], true)) {
+                    continue;
                 }
+
+                throw new \RuntimeException("Gemini API error: {$lastError}");
             }
 
             throw new \RuntimeException("All Gemini models failed: {$lastError}");

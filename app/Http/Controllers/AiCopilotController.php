@@ -8,6 +8,9 @@ use App\Models\ConversionRun;
 use App\Models\GateRegister;
 use App\Models\ProductionBatch;
 use App\Services\FactoryAiCopilotService;
+use App\Http\Controllers\CorrugationController;
+use App\Http\Controllers\PettyCashController;
+use App\Http\Controllers\PrintedImportController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -182,13 +185,30 @@ class AiCopilotController extends Controller
 
         $path = parse_url($validated['target_path'], PHP_URL_PATH) ?: $validated['target_path'];
         $payload = $validated['payload'];
+        $user = $request->user();
 
         // Strictly enforce RBAC permissions before executing any AI-proposed write
-        $isGatePath = $path === '/gate-register' || preg_match('#^/gate-register/\d+/weigh-exit$#', $path);
-        if (! $isGatePath && ! $request->user()?->isFinancialAuthorized()) {
+        if ($user?->isReadOnly()) {
             return response()->json([
                 'status' => 'forbidden',
-                'message' => 'Access denied. Your account cannot perform financial or production updates.',
+                'message' => 'Access denied. Your account has read-only overview access.',
+            ], 403);
+        }
+
+        $isGatePath = $path === '/gate-register' || preg_match('#^/gate-register/\d+/weigh-exit$#', $path);
+        $isPettyPath = $path === '/petty-cash';
+
+        if ($user?->isManager() && ! $isPettyPath) {
+            return response()->json([
+                'status' => 'forbidden',
+                'message' => 'Access denied. Manager permissions are restricted to Petty Cash expenses.',
+            ], 403);
+        }
+
+        if (! $isGatePath && ! $isPettyPath && ! $user?->canEditOperations()) {
+            return response()->json([
+                'status' => 'forbidden',
+                'message' => 'Access denied. Your account cannot perform operational updates.',
             ], 403);
         }
 
@@ -236,6 +256,12 @@ class AiCopilotController extends Controller
                 } elseif (preg_match('#^/gate-register/(\d+)/weigh-exit$#', $path, $m)) {
                     $gate = GateRegister::findOrFail($m[1]);
                     app(GateRegisterController::class)->updateWeightAndExit($subRequest, $gate);
+                } elseif ($path === '/petty-cash') {
+                    app(PettyCashController::class)->store($subRequest);
+                } elseif ($path === '/production/printed-imports') {
+                    app(PrintedImportController::class)->store($subRequest);
+                } elseif ($path === '/production/corrugations') {
+                    app(CorrugationController::class)->store($subRequest);
                 } elseif ($path === '/khata/party') {
                     app(KhataController::class)->storeParty($subRequest);
                 } elseif ($path === '/khata/voucher') {
@@ -252,6 +278,8 @@ class AiCopilotController extends Controller
                     $aiMessage->update(['action_status' => 'executed']);
                 }
             });
+
+            FactoryAiCopilotService::clearSnapshotCache($request->user()?->id);
         } catch (ValidationException $e) {
             return response()->json([
                 'status' => 'validation_error',
