@@ -9,16 +9,18 @@
         <span class="material-symbols-outlined text-[16px]">print</span>
         <span>Print Today's Cash Sheet</span>
     </a>
-    <button onclick="openModal('modal-cash-in')"
-        class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 shadow-xs transition-colors">
-        <span class="material-symbols-outlined text-[16px]">add_circle</span>
-        <span>Cash In / Counter Sale</span>
-    </button>
-    <button onclick="openModal('modal-cash-out')"
-        class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 shadow-xs transition-colors">
-        <span class="material-symbols-outlined text-[16px]">remove_circle</span>
-        <span>Record Expense (Kharch)</span>
-    </button>
+    @if(auth()->user()?->canAddExpenses())
+        <button onclick="openModal('modal-cash-in')"
+            class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 shadow-xs transition-colors">
+            <span class="material-symbols-outlined text-[16px]">add_circle</span>
+            <span>Cash In / Counter Sale</span>
+        </button>
+        <button onclick="openModal('modal-cash-out')"
+            class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 shadow-xs transition-colors">
+            <span class="material-symbols-outlined text-[16px]">remove_circle</span>
+            <span>Record Expense (Kharch)</span>
+        </button>
+    @endif
 @endsection
 
 @section('content')

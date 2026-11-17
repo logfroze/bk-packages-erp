@@ -4,14 +4,16 @@
 @section('breadcrumb', 'Party Khata')
 
 @section('header_actions')
-    <div class="flex items-center gap-2 flex-wrap">
-        <button onclick="openModal('modal-new-party')" class="px-3.5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 shadow-xs transition-colors">
-            + Add Party / Local Vendor
-        </button>
-        <button onclick="openModal('modal-voucher')" class="px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 shadow-xs transition-colors">
-            + Record Voucher / Payment
-        </button>
-    </div>
+    @if(auth()->user()?->canEditOperations())
+        <div class="flex items-center gap-2 flex-wrap">
+            <button onclick="openModal('modal-new-party')" class="px-3.5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 shadow-xs transition-colors">
+                + Add Party / Local Vendor
+            </button>
+            <button onclick="openModal('modal-voucher')" class="px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 shadow-xs transition-colors">
+                + Record Voucher / Payment
+            </button>
+        </div>
+    @endif
 @endsection
 
 @section('content')

@@ -20,12 +20,16 @@ class ProductionBatch extends Model
         'due_date',
         'started_at',
         'finished_at',
+        'custom_fields',
+        'custom_grid',
     ];
 
     protected $casts = [
         'due_date' => 'datetime',
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
+        'custom_fields' => 'array',
+        'custom_grid' => 'array',
     ];
 
     public function cartonProduct(): BelongsTo

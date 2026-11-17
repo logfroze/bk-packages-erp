@@ -8,6 +8,11 @@
         @php
             $waSummary = urlencode("*BK PACKAGES - KHATA STATEMENT*\nParty: {$party->name}\nClosing Balance: Rs. " . number_format(abs($party->current_balance)) . ($party->current_balance >= 0 ? ' (Receivable)' : ' (Payable)') . "\nTotal Debits: Rs. " . number_format($totalDebit) . "\nTotal Credits: Rs. " . number_format($totalCredit) . "\n\nSent by Mirza Sohail (BK Packages Okara)");
         @endphp
+        <a href="{{ route('documents.sales_invoice', ['party_name' => $party->name, 'party_address' => $party->address, 'party_phone' => $party->phone]) }}" target="_blank"
+           class="px-3.5 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 inline-flex items-center gap-1.5 shadow-xs">
+            <span class="material-symbols-outlined text-[16px]">receipt</span>
+            Print Bill / Receipt
+        </a>
         <a href="https://wa.me/?text={{ $waSummary }}" target="_blank"
            class="px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 inline-flex items-center gap-1.5">
             WhatsApp Statement
@@ -80,7 +85,14 @@
                         <tr class="hover:bg-slate-50/70">
                             <td class="py-4 px-5 text-slate-600 num-tabular whitespace-nowrap">{{ $entry->entry_date->format('d M Y') }}</td>
                             <td class="py-4 px-5 font-semibold text-blue-600 whitespace-nowrap">
-                                {{ $entry->voucher->voucher_number ?? 'OPENING' }}
+                                @if($entry->voucher_id)
+                                    <a href="{{ route('documents.sales_invoice', $entry->voucher_id) }}" target="_blank" class="hover:underline inline-flex items-center gap-1">
+                                        <span>{{ $entry->voucher->voucher_number }}</span>
+                                        <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+                                    </a>
+                                @else
+                                    <span>{{ $entry->voucher->voucher_number ?? 'OPENING' }}</span>
+                                @endif
                             </td>
                             <td class="py-4 px-5 text-slate-800">{{ $entry->narration }}</td>
                             <td class="py-4 px-5 text-right num-tabular font-medium text-slate-900">

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CartonProduct;
+use App\Models\CustomErpCard;
 use App\Models\Party;
 use App\Models\ProductionBatch;
 use Illuminate\Http\RedirectResponse;
@@ -25,8 +26,9 @@ class ProductionController extends Controller
         $batches = $query->get();
         $cartonProducts = CartonProduct::with('client')->orderBy('box_title')->get();
         $customers = Party::where('type', 'CUSTOMER')->orderBy('name')->get();
+        $customCards = CustomErpCard::forPage('production')->latest()->get();
 
-        return view('production.index', compact('batches', 'cartonProducts', 'customers', 'statusFilter'));
+        return view('production.index', compact('batches', 'cartonProducts', 'customers', 'statusFilter', 'customCards'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -41,7 +43,27 @@ class ProductionController extends Controller
             'due_date' => 'nullable|date',
         ]);
 
-        DB::transaction(function () use ($validated) {
+        $customFields = [];
+        if ($request->has('custom_keys') && is_array($request->input('custom_keys'))) {
+            $keys = $request->input('custom_keys');
+            $vals = $request->input('custom_values', []);
+            foreach ($keys as $idx => $k) {
+                $trimmed = trim($k ?? '');
+                if ($trimmed !== '') {
+                    $customFields[$trimmed] = $vals[$idx] ?? '';
+                }
+            }
+        }
+
+        $customGrid = null;
+        if ($request->filled('custom_grid_json')) {
+            $decoded = json_decode($request->input('custom_grid_json'), true);
+            if (is_array($decoded)) {
+                $customGrid = $decoded;
+            }
+        }
+
+        DB::transaction(function () use ($validated, $customFields, $customGrid) {
             $product = CartonProduct::findOrFail($validated['carton_product_id']);
             $producedNow = (int) ($validated['produced_quantity'] ?? 0);
 
@@ -62,6 +84,8 @@ class ProductionController extends Controller
                 'due_date' => $validated['due_date'] ?? now()->addDay(),
                 'started_at' => now(),
                 'finished_at' => $status === 'COMPLETED' ? now() : null,
+                'custom_fields' => !empty($customFields) ? $customFields : null,
+                'custom_grid' => $customGrid,
             ]);
 
             if ($producedNow > 0) {

@@ -4,10 +4,12 @@
 @section('breadcrumb', 'Gate Register')
 
 @section('header_actions')
-    <button onclick="openModal('modal-gate-entry')" class="px-4 py-2 rounded-lg bg-navy-900 text-white text-sm font-medium hover:bg-navy-800 flex items-center gap-2">
-        <span class="material-symbols-outlined text-[18px]">add</span>
-        <span>+ New Vehicle Entry</span>
-    </button>
+    @if(!auth()->user()?->isReadOnly())
+        <button onclick="openModal('modal-gate-entry')" class="px-4 py-2 rounded-lg bg-navy-900 text-white text-sm font-medium hover:bg-navy-800 flex items-center gap-2">
+            <span class="material-symbols-outlined text-[18px]">add</span>
+            <span>+ New Vehicle Entry</span>
+        </button>
+    @endif
 @endsection
 
 @section('content')
@@ -98,11 +100,18 @@
                             </td>
                             <td class="py-4 px-5 text-right whitespace-nowrap">
                                 <div class="inline-flex items-center gap-2">
-                                    @if(!in_array($g->status, ['EXITED', 'COMPLETED']))
+                                    @if(!auth()->user()?->isReadOnly() && !in_array($g->status, ['EXITED', 'COMPLETED']))
                                         <button onclick="openWeighModal({{ $g->id }}, '{{ $g->gate_pass_number }}', '{{ $g->gross_weight_kg ?? '' }}', '{{ $g->tare_weight_kg ?? '' }}')"
                                                 class="px-3 py-1.5 rounded-lg bg-navy-900 text-white text-xs font-medium hover:bg-navy-800">
                                             Weigh & Exit
                                         </button>
+                                    @endif
+                                    @if($g->movement_type === 'OUTWARD_DISPATCH')
+                                        <a href="{{ route('documents.delivery_challan', $g->id) }}" target="_blank"
+                                           class="px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 inline-flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[15px]">local_shipping</span>
+                                            Challan
+                                        </a>
                                     @endif
                                     <a href="{{ route('gate.slip', $g) }}" target="_blank"
                                        class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-medium hover:bg-slate-50 inline-flex items-center gap-1">

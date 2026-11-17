@@ -168,12 +168,35 @@
                     <span>Dashboard</span>
                 </a>
 
+                <a href="{{ route('chat.index') }}"
+                    class="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('chat.*') ? 'bg-navy-800 text-white border-l-4 border-blue-500' : 'text-slate-300 hover:bg-navy-800/60 hover:text-white' }}">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined {{ request()->routeIs('chat.*') ? 'text-blue-400' : '' }}">chat</span>
+                        <span>Factory Chat</span>
+                    </div>
+                    <span id="sidebar-chat-unread" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500 text-white shadow-xs">0</span>
+                </a>
+
                 @if(auth()->user()?->isFinancialAuthorized())
-                    <a href="{{ route('production.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('production.*') ? 'bg-navy-800 text-white border-l-4 border-blue-500' : 'text-slate-300 hover:bg-navy-800/60 hover:text-white' }}">
+                    <a href="{{ route('production.printed_imports') }}"
+                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('production.printed_imports*') ? 'bg-navy-800 text-white border-l-4 border-blue-500' : 'text-slate-300 hover:bg-navy-800/60 hover:text-white' }}">
                         <span
-                            class="material-symbols-outlined {{ request()->routeIs('production.*') ? 'text-blue-400' : '' }}">precision_manufacturing</span>
-                        <span>Production</span>
+                            class="material-symbols-outlined {{ request()->routeIs('production.printed_imports*') ? 'text-blue-400' : '' }}">layers</span>
+                        <span>Printed Imports</span>
+                    </a>
+
+                    <a href="{{ route('production.corrugations') }}"
+                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('production.corrugations*') ? 'bg-navy-800 text-white border-l-4 border-blue-500' : 'text-slate-300 hover:bg-navy-800/60 hover:text-white' }}">
+                        <span
+                            class="material-symbols-outlined {{ request()->routeIs('production.corrugations*') ? 'text-blue-400' : '' }}">view_quilt</span>
+                        <span>Corrugations (Nali)</span>
+                    </a>
+
+                    <a href="{{ route('production.index') }}"
+                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ (request()->routeIs('production.index') || request()->routeIs('production.conversion*')) ? 'bg-navy-800 text-white border-l-4 border-blue-500' : 'text-slate-300 hover:bg-navy-800/60 hover:text-white' }}">
+                        <span
+                            class="material-symbols-outlined {{ (request()->routeIs('production.index') || request()->routeIs('production.conversion*')) ? 'text-blue-400' : '' }}">precision_manufacturing</span>
+                        <span>Finishing & Conversion</span>
                     </a>
 
                     <a href="{{ route('inventory.index') }}"
@@ -223,19 +246,21 @@
                         <span>Day-End Reports</span>
                     </a>
 
-                    <p class="px-3 pt-5 pb-2 text-[11px] uppercase font-semibold tracking-wider text-slate-500">Settings</p>
+                    @if(auth()->user()?->isFullAdmin())
+                        <p class="px-3 pt-5 pb-2 text-[11px] uppercase font-semibold tracking-wider text-slate-500">Settings</p>
 
-                    <a href="{{ route('settings.numbering') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('settings.*') ? 'bg-navy-800 text-white border-l-4 border-blue-500' : 'text-slate-300 hover:bg-navy-800/60 hover:text-white' }}">
-                        <span
-                            class="material-symbols-outlined {{ request()->routeIs('settings.*') ? 'text-blue-400' : '' }}">format_list_numbered</span>
-                        <span>Bill Book & Numbering</span>
-                    </a>
+                        <a href="{{ route('settings.numbering') }}"
+                            class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('settings.*') ? 'bg-navy-800 text-white border-l-4 border-blue-500' : 'text-slate-300 hover:bg-navy-800/60 hover:text-white' }}">
+                            <span
+                                class="material-symbols-outlined {{ request()->routeIs('settings.*') ? 'text-blue-400' : '' }}">format_list_numbered</span>
+                            <span>Bill Book & Numbering</span>
+                        </a>
+                    @endif
                 @endif
             </nav>
         </div>
 
-        <!-- User Profile Footer & Sign Out -->
+        <!-- User Profile Footer, Quick Lock & Sign Out -->
         <div class="p-4 border-t border-slate-800">
             <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-navy-800/70">
                 <div class="flex items-center gap-2.5 min-w-0">
@@ -245,19 +270,38 @@
                     </div>
                     <div class="min-w-0">
                         <div class="text-sm font-medium text-white truncate">
-                            {{ auth()->user()?->name ?? 'Mirza Sohail' }}</div>
+                            {{ auth()->user()?->name ?? 'Mirza Sohail' }}
+                        </div>
                         <div class="text-[11px] text-slate-400 truncate">
-                            {{ ucfirst(strtolower(str_replace('_', ' ', auth()->user()?->role ?? 'Accountant'))) }}
+                            @if(auth()->user()?->role === 'ADMIN')
+                                Mirza Sohail (Full Admin)
+                            @elseif(auth()->user()?->role === 'MANAGER')
+                                Manager (Son of Owner)
+                            @elseif(auth()->user()?->role === 'OWNER')
+                                Company Owner (View Only)
+                            @else
+                                {{ ucfirst(strtolower(str_replace('_', ' ', auth()->user()?->role ?? 'Staff'))) }}
+                            @endif
                         </div>
                     </div>
                 </div>
-                <form action="{{ route('logout') }}" method="POST" data-no-offline>
-                    @csrf
-                    <button type="submit" title="Sign Out"
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
-                        <span class="material-symbols-outlined text-[18px]">logout</span>
-                    </button>
-                </form>
+                <div class="flex items-center gap-1 shrink-0">
+                    <form action="{{ route('app.lock') }}" method="POST" data-no-offline
+                        title="Lock ERP (Enter PIN to unlock)">
+                        @csrf
+                        <button type="submit"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-700 transition-colors">
+                            <span class="material-symbols-outlined text-[18px]">lock</span>
+                        </button>
+                    </form>
+                    <form action="{{ route('logout') }}" method="POST" data-no-offline title="Sign Out">
+                        @csrf
+                        <button type="submit"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors">
+                            <span class="material-symbols-outlined text-[18px]">logout</span>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </aside>
@@ -279,6 +323,38 @@
             </div>
 
             <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                @if(auth()->user()?->isOwner())
+                    <span
+                        class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-xs"
+                        title="Overview profile: View and explore factory reports and progress without edit permissions.">
+                        <span class="material-symbols-outlined text-[15px] text-amber-600">visibility</span>
+                        <span>Company Owner (View Only)</span>
+                    </span>
+                @elseif(auth()->user()?->isManager())
+                    <span
+                        class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200 shadow-xs"
+                        title="Manager profile: Review all operational progress and log daily expenses.">
+                        <span class="material-symbols-outlined text-[15px] text-purple-600">account_circle</span>
+                        <span>Manager (Dr. Ghulam Abbas)</span>
+                    </span>
+                @endif
+
+                <form action="{{ route('app.lock') }}" method="POST" class="inline" title="Lock App with 4-Digit PIN">
+                    @csrf
+                    <button type="submit"
+                        class="p-1.5 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                        title="Lock screen (requires 4-digit PIN to unlock)">
+                        <span class="material-symbols-outlined text-[18px]">lock</span>
+                    </button>
+                </form>
+
+                <a href="{{ route('chat.index') }}"
+                    class="relative p-1.5 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                    title="Open Factory Internal Chat">
+                    <span class="material-symbols-outlined text-[20px]">forum</span>
+                    <span id="header-chat-unread-dot" class="hidden absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-blue-600 ring-2 ring-white"></span>
+                </a>
+
                 <button id="ai-toggle-btn" onclick="window.BKAiCopilot?.toggle()"
                     class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-colors cursor-pointer"
                     title="Toggle AI Factory Assistant side panel">
@@ -295,7 +371,9 @@
                     class="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
                     {{ now()->format('l, d M Y') }}
                 </span>
-                @yield('header_actions')
+                @if(auth()->user()?->isFullAdmin() || (auth()->user()?->isManager() && request()->routeIs('petty_cash.*')))
+                    @yield('header_actions')
+                @endif
             </div>
         </header>
 
@@ -430,7 +508,8 @@
             <div id="ai-messages" class="flex-1 overflow-y-auto p-4 space-y-3">
                 <div id="ai-welcome-box" class="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
                     <div class="text-sm font-semibold text-slate-900">Assalam-o-Alaikum,
-                        {{ auth()->user()?->name ?? 'Mirza Sohail' }}!</div>
+                        {{ auth()->user()?->name ?? 'Mirza Sohail' }}!
+                    </div>
                     <p class="text-xs text-slate-600 leading-relaxed">
                         Use this assistant <strong>side by side</strong> while working on any ERP page. Ask in
                         <strong>English</strong> or <strong>Roman Urdu</strong> — all chats are saved automatically in
@@ -504,6 +583,38 @@
             document.getElementById(id).classList.add('hidden');
             document.body.classList.remove('overflow-hidden');
         }
+
+        // Global In-App Chat Unread Polling
+        (function initChatUnreadNotifier() {
+            function updateChatBadges() {
+                fetch('{{ route('chat.unread_total') }}')
+                    .then(r => r.ok ? r.json() : null)
+                    .then(data => {
+                        if (!data) return;
+                        const total = data.unread_total || 0;
+                        const sBadge = document.getElementById('sidebar-chat-unread');
+                        const hDot = document.getElementById('header-chat-unread-dot');
+                        if (sBadge) {
+                            if (total > 0) {
+                                sBadge.textContent = total;
+                                sBadge.classList.remove('hidden');
+                            } else {
+                                sBadge.classList.add('hidden');
+                            }
+                        }
+                        if (hDot) {
+                            if (total > 0) {
+                                hDot.classList.remove('hidden');
+                            } else {
+                                hDot.classList.add('hidden');
+                            }
+                        }
+                    })
+                    .catch(() => {});
+            }
+            updateChatBadges();
+            setInterval(updateChatBadges, 8000);
+        })();
 
         // PWA Offline Service Worker Registration
         if ('serviceWorker' in navigator) {

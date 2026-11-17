@@ -1,17 +1,6 @@
-const CACHE_NAME = 'bk-packages-erp-v4';
+const CACHE_NAME = 'bk-packages-erp-v5';
 
-const APP_SHELL_URLS = [
-  '/',
-  '/production',
-  '/production/conversion',
-  '/inventory',
-  '/gate-register',
-  '/khata',
-  '/attendance',
-  '/attendance/weekly',
-  '/petty-cash',
-  '/settings/numbering',
-  '/reports',
+const STATIC_ASSET_URLS = [
   '/manifest.json',
   '/icons/icon.svg',
   '/js/fast-nav.js',
@@ -19,12 +8,12 @@ const APP_SHELL_URLS = [
   '/js/ai-copilot.js'
 ];
 
-// Install: Pre-cache core app shell
+// Install: Cache essential static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.allSettled(
-        APP_SHELL_URLS.map((url) =>
+        STATIC_ASSET_URLS.map((url) =>
           fetch(url).then((res) => {
             if (res.ok) return cache.put(url, res);
           }).catch(() => null)
@@ -34,7 +23,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: Clean up older cache versions immediately
+// Activate: Immediately purge all older stale caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -44,18 +33,20 @@ self.addEventListener('activate', (event) => {
 });
 
 // Fetch Strategy:
-// 1. Static CDNs & Assets -> Cache-first with background revalidation
-// 2. Application HTML Pages -> Stale-While-Revalidate (Instant 0ms display + background fresh data fetch)
+// 1. Static Assets (JS, CSS, Icons, Fonts) -> Cache-first with background revalidation
+// 2. HTML Navigation & Data Pages -> Network-First (Fresh data when online, cached fallback only when offline)
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
 
-  // Skip offline-sync ping & replay from caching
-  if (url.pathname.startsWith('/offline-sync')) return;
+  // Never cache API sync or dynamic API replay endpoints
+  if (url.pathname.startsWith('/offline-sync') || url.pathname.includes('/logout') || url.pathname.includes('/login')) {
+    return;
+  }
 
-  // Static CDN & Asset requests -> Cache-first
+  // 1. Static Assets -> Cache First with revalidate
   if (
     url.origin !== self.location.origin ||
     url.pathname.startsWith('/js/') ||
@@ -78,10 +69,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Application Pages -> Stale-While-Revalidate (0ms instantaneous cached load + silent background refresh)
-  event.respondWith(
-    caches.match(req).then((cachedResponse) => {
-      const fetchPromise = fetch(req)
+  // 2. HTML Navigation Requests -> Network First (Never serve stale dashboard on other routes)
+  if (req.mode === 'navigate' || req.headers.get('Accept')?.includes('text/html')) {
+    event.respondWith(
+      fetch(req)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.ok) {
             const copy = networkResponse.clone();
@@ -89,15 +80,38 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          // If offline and request wasn't cached, try fallback to dashboard
-          if (cachedResponse) return cachedResponse;
-          return caches.match('/');
-        });
+        .catch(async () => {
+          // Network failed: offline mode. Look up cached version of THIS exact request
+          const cached = await caches.match(req);
+          if (cached) return cached;
 
-      // If cached response exists, return it immediately for 0ms load!
-      // The fetchPromise runs in the background to update the cache for next view.
-      return cachedResponse || fetchPromise;
-    })
-  );
+          // If this specific page wasn't cached, return a clean offline fallback notice
+          return new Response(
+            `<!DOCTYPE html>
+            <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>Offline Mode — BK Packages ERP</title>
+              <script src="https://cdn.tailwindcss.com"></script>
+            </head>
+            <body class="bg-slate-50 min-h-screen flex items-center justify-center p-6 text-slate-800 font-sans">
+              <div class="max-w-md w-full bg-white rounded-2xl border border-slate-200 p-8 shadow-sm text-center">
+                <div class="w-12 h-12 bg-amber-100 text-amber-700 rounded-xl flex items-center justify-center mx-auto mb-4 font-bold text-xl">
+                  ⚡
+                </div>
+                <h2 class="text-xl font-bold text-slate-900 mb-2">You are currently offline</h2>
+                <p class="text-sm text-slate-500 mb-6">This page has not been cached yet. Reconnect to the local network or internet to load fresh data.</p>
+                <div class="flex gap-3 justify-center">
+                  <a href="/" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Go to Dashboard</a>
+                  <button onclick="window.location.reload()" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50">Retry Connection</button>
+                </div>
+              </div>
+            </body>
+            </html>`,
+            { headers: { 'Content-Type': 'text/html' } }
+          );
+        })
+    );
+  }
 });

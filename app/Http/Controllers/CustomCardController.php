@@ -1,0 +1,87 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\CustomErpCard;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+
+class CustomCardController extends Controller
+{
+    public function store(Request $request): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validate([
+            'page_key' => 'required|string|max:60',
+            'title' => 'required|string|max:150',
+            'subtitle' => 'nullable|string|max:250',
+            'card_type' => 'required|in:DYNAMIC_GRID,KEY_VALUE,METRIC',
+            'rows_count' => 'nullable|integer|min:1|max:50',
+            'columns_count' => 'nullable|integer|min:1|max:20',
+            'column_headers' => 'nullable|array',
+            'grid_data' => 'nullable|array',
+            'field_pairs' => 'nullable|array',
+            'badge_text' => 'nullable|string|max:50',
+            'badge_color' => 'nullable|string|max:30',
+        ]);
+
+        $card = CustomErpCard::create([
+            'page_key' => $validated['page_key'],
+            'title' => trim($validated['title']),
+            'subtitle' => $validated['subtitle'] ? trim($validated['subtitle']) : null,
+            'card_type' => $validated['card_type'],
+            'rows_count' => (int) ($validated['rows_count'] ?? 3),
+            'columns_count' => (int) ($validated['columns_count'] ?? 4),
+            'column_headers' => $validated['column_headers'] ?? null,
+            'grid_data' => $validated['grid_data'] ?? null,
+            'field_pairs' => $validated['field_pairs'] ?? null,
+            'badge_text' => $validated['badge_text'] ?? null,
+            'badge_color' => $validated['badge_color'] ?? 'blue',
+            'sort_order' => CustomErpCard::where('page_key', $validated['page_key'])->count() + 1,
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'card' => $card]);
+        }
+
+        return back()->with('success', "Custom card '{$card->title}' created successfully.");
+    }
+
+    public function update(Request $request, int $id): RedirectResponse|JsonResponse
+    {
+        $card = CustomErpCard::findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => 'sometimes|required|string|max:150',
+            'subtitle' => 'nullable|string|max:250',
+            'rows_count' => 'nullable|integer|min:1|max:50',
+            'columns_count' => 'nullable|integer|min:1|max:20',
+            'column_headers' => 'nullable|array',
+            'grid_data' => 'nullable|array',
+            'field_pairs' => 'nullable|array',
+            'badge_text' => 'nullable|string|max:50',
+            'badge_color' => 'nullable|string|max:30',
+        ]);
+
+        $card->update($validated);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'card' => $card]);
+        }
+
+        return back()->with('success', "Custom card '{$card->title}' updated successfully.");
+    }
+
+    public function destroy(int $id): RedirectResponse|JsonResponse
+    {
+        $card = CustomErpCard::findOrFail($id);
+        $title = $card->title;
+        $card->delete();
+
+        if (request()->wantsJson()) {
+            return response()->json(['success' => true, 'message' => 'Card deleted']);
+        }
+
+        return back()->with('success', "Custom card '{$title}' removed.");
+    }
+}
