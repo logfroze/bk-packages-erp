@@ -180,6 +180,10 @@
                                 <span class="material-symbols-outlined text-[16px]">download</span>
                             </a>
                             @if(!auth()->user()?->isReadOnly())
+                                <button type="button" onclick="openEditVaultModal({{ json_encode($item) }})"
+                                        class="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-slate-50 transition-colors" title="Edit Item">
+                                    <span class="material-symbols-outlined text-[16px]">edit</span>
+                                </button>
                                 <form action="{{ route('media_vault.destroy', $item) }}" method="POST" onsubmit="return confirm('Delete this receipt from vault?');" class="inline">
                                     @csrf
                                     @method('DELETE')
@@ -232,20 +236,19 @@
             <!-- Live Camera Snap vs File Picker Trigger -->
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Select Picture or Snap with Camera *</label>
+                <input type="file" id="vault_file_input" name="media_file" accept="image/*,.pdf" class="hidden" onchange="handleVaultPreview(this)" required />
                 <div class="grid grid-cols-2 gap-2 mb-2">
-                    <label class="cursor-pointer border-2 border-dashed border-blue-400 hover:border-blue-600 bg-blue-50/50 hover:bg-blue-50 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-colors">
+                    <button type="button" onclick="const fi = document.getElementById('vault_file_input'); fi.setAttribute('capture','environment'); fi.click();" class="border-2 border-dashed border-blue-400 hover:border-blue-600 bg-blue-50/50 hover:bg-blue-50 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-colors">
                         <span class="material-symbols-outlined text-2xl text-blue-600">photo_camera</span>
                         <span class="text-xs font-bold text-blue-900 mt-1">Take Live Photo</span>
                         <span class="text-[10px] text-slate-500">Opens Camera</span>
-                        <input type="file" name="media_file" accept="image/*" capture="environment" class="hidden" onchange="handleVaultPreview(this)" />
-                    </label>
+                    </button>
 
-                    <label class="cursor-pointer border-2 border-dashed border-slate-300 hover:border-slate-500 bg-slate-50 hover:bg-slate-100 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-colors">
+                    <button type="button" onclick="const fi = document.getElementById('vault_file_input'); fi.removeAttribute('capture'); fi.click();" class="border-2 border-dashed border-slate-300 hover:border-slate-500 bg-slate-50 hover:bg-slate-100 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-colors">
                         <span class="material-symbols-outlined text-2xl text-slate-600">upload_file</span>
                         <span class="text-xs font-bold text-slate-800 mt-1">Browse Gallery</span>
                         <span class="text-[10px] text-slate-500">JPG, PNG, PDF</span>
-                        <input type="file" name="media_file" accept="image/*,.pdf" class="hidden" onchange="handleVaultPreview(this)" />
-                    </label>
+                    </button>
                 </div>
 
                 <div id="vault-preview-box" class="hidden p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
@@ -301,6 +304,98 @@
                 </button>
                 <button type="submit" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 shadow-xs">
                     Save into Vault
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Edit Vault Receipt -->
+<div id="modal-edit-vault" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[20px]">edit</span>
+                </div>
+                <h3 class="text-base font-bold text-slate-900">Edit Vault Receipt</h3>
+            </div>
+            <button onclick="closeModal('modal-edit-vault')" class="text-slate-400 hover:text-slate-600">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <form id="edit-vault-form" action="" method="POST" enctype="multipart/form-data" class="mt-4 space-y-4">
+            @csrf
+            @method('PUT')
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Receipt Title / Description *</label>
+                <input type="text" id="edit-vault-title" name="title" required
+                       class="w-full rounded-lg border-slate-300 text-xs focus:border-blue-600 focus:ring-blue-600" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Receipt Category *</label>
+                    <select id="edit-vault-category" name="category" required class="w-full rounded-lg border-slate-300 text-xs focus:border-blue-600 focus:ring-blue-600">
+                        <option value="LOCAL_PARTY_BILL">Local Shop / Party Bill</option>
+                        <option value="GROCERY_FOOD">Daily Food & Grocery Pack</option>
+                        <option value="PETROL_FUEL">Petrol & Generator Fuel</option>
+                        <option value="HARDWARE_TOOLS">Hardware & Machine Tools</option>
+                        <option value="GATE_CHALLAN">Gate Weigh / Delivery Challan</option>
+                        <option value="RECEIPT_VOUCHER">Payment Receipt Voucher</option>
+                        <option value="GENERAL">General Receipt / Photo</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Bill Amount (Rs.)</label>
+                    <input type="number" step="0.01" id="edit-vault-amount" name="linked_amount"
+                           class="w-full rounded-lg border-slate-300 text-xs focus:border-blue-600 focus:ring-blue-600" />
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Vendor / Shop Name</label>
+                <input type="text" id="edit-vault-shop" name="linked_party_or_shop"
+                       class="w-full rounded-lg border-slate-300 text-xs focus:border-blue-600 focus:ring-blue-600" />
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Notes / Extra Particulars</label>
+                <textarea id="edit-vault-notes" name="notes" rows="2"
+                          class="w-full rounded-lg border-slate-300 text-xs focus:border-blue-600 focus:ring-blue-600"></textarea>
+            </div>
+
+            <!-- Optional: Replace File -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Replace Receipt Photo / Document (Optional)</label>
+                <input type="file" id="edit_vault_file_input" name="media_file" accept="image/*,.pdf" class="hidden" onchange="handleEditVaultPreview(this)" />
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                    <button type="button" onclick="const fi=document.getElementById('edit_vault_file_input'); fi.setAttribute('capture','environment'); fi.click();" class="border-2 border-dashed border-blue-400 hover:border-blue-600 bg-blue-50/50 hover:bg-blue-50 p-2.5 rounded-xl flex items-center justify-center gap-1.5 text-center text-xs font-bold text-blue-900 transition-colors">
+                        <span class="material-symbols-outlined text-lg text-blue-600">photo_camera</span>
+                        <span>Camera</span>
+                    </button>
+                    <button type="button" onclick="const fi=document.getElementById('edit_vault_file_input'); fi.removeAttribute('capture'); fi.click();" class="border border-slate-300 hover:border-slate-500 bg-slate-50 hover:bg-slate-100 p-2.5 rounded-xl flex items-center justify-center gap-1.5 text-center text-xs font-bold text-slate-800 transition-colors">
+                        <span class="material-symbols-outlined text-lg text-slate-600">upload_file</span>
+                        <span>Browse File</span>
+                    </button>
+                </div>
+                <div id="edit-vault-preview-box" class="hidden p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
+                    <img id="edit-vault-preview-img" src="" class="w-12 h-12 object-cover rounded-lg border border-slate-200" />
+                    <div class="flex-1 truncate">
+                        <span id="edit-vault-preview-name" class="text-xs font-bold text-slate-900 block truncate"></span>
+                        <span id="edit-vault-preview-size" class="text-[11px] text-slate-500"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button type="button" onclick="closeModal('modal-edit-vault')" class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 shadow-xs">
+                    Update Receipt
                 </button>
             </div>
         </form>
@@ -390,6 +485,49 @@ function viewFullImage(src, title, type, category, amount, shop) {
     }
 
     openModal('modal-image-viewer');
+}
+
+function openEditVaultModal(item) {
+    document.getElementById('edit-vault-form').action = '/media-vault/' + item.id;
+    document.getElementById('edit-vault-title').value = item.title || '';
+    document.getElementById('edit-vault-category').value = item.category || 'GENERAL';
+    document.getElementById('edit-vault-amount').value = item.linked_amount || '';
+    document.getElementById('edit-vault-shop').value = item.linked_party_or_shop || '';
+    document.getElementById('edit-vault-notes').value = item.notes || '';
+    
+    // reset preview
+    const previewBox = document.getElementById('edit-vault-preview-box');
+    if (previewBox) previewBox.classList.add('hidden');
+    const fileInput = document.getElementById('edit_vault_file_input');
+    if (fileInput) fileInput.value = '';
+
+    openModal('modal-edit-vault');
+}
+
+function handleEditVaultPreview(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const previewBox = document.getElementById('edit-vault-preview-box');
+        const previewImg = document.getElementById('edit-vault-preview-img');
+        const previewName = document.getElementById('edit-vault-preview-name');
+        const previewSize = document.getElementById('edit-vault-preview-size');
+
+        previewName.textContent = file.name;
+        previewSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
+
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImg.src = e.target.result;
+                previewImg.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        } else {
+            previewImg.classList.add('hidden');
+        }
+
+        previewBox.classList.remove('hidden');
+    }
 }
 </script>
 @endsection

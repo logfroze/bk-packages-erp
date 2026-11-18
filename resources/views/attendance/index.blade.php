@@ -9,10 +9,10 @@
             <span class="material-symbols-outlined text-[16px]">calendar_view_week</span>
             <span>Thursday Weekly Wages</span>
         </a>
-        <button onclick="openModal('modal-advance')" class="px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors">
+        <button type="button" onclick="openModal('modal-advance')" class="px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors">
             + Give Advance
         </button>
-        <button onclick="openModal('modal-add-worker')" class="px-3.5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 transition-colors">
+        <button type="button" onclick="openModal('modal-add-worker')" class="px-3.5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 transition-colors">
             + Add Worker
         </button>
     </div>
@@ -128,10 +128,18 @@
                                 Rs. {{ number_format($wage, 0) }}
                             </td>
                             <td class="py-4 px-5 text-center">
-                                <button type="button" onclick="openWorkerEditModal({{ json_encode($w) }})"
-                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                                    Edit
-                                </button>
+                                <div class="flex items-center justify-center gap-2">
+                                    <button type="button" onclick="openWorkerEditModal({{ json_encode($w) }})"
+                                        class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                        Edit
+                                    </button>
+                                    @if(auth()->user()?->isFullAdmin())
+                                        <button type="button" onclick="confirmDeleteWorker({{ $w->id }}, @js($w->full_name))"
+                                                class="text-xs text-red-500 hover:text-red-700 font-medium" title="Delete Worker">
+                                            Delete
+                                        </button>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @endforeach
@@ -315,10 +323,26 @@
             </form>
         </div>
     </div>
+
+    <!-- Standalone Worker Delete Form (Prevents HTML Form Nesting) -->
+    <form id="standalone-delete-worker-form" method="POST" class="hidden">
+        @csrf
+        @method('DELETE')
+        <input type="hidden" name="worker_id" id="standalone-delete-worker-id" value="">
+    </form>
 @endsection
 
 @push('scripts')
 <script>
+function confirmDeleteWorker(id, name) {
+    if (confirm('Delete worker "' + name + '" from factory payroll?')) {
+        const form = document.getElementById('standalone-delete-worker-form');
+        form.action = '/attendance/worker/' + id;
+        document.getElementById('standalone-delete-worker-id').value = id;
+        form.submit();
+    }
+}
+
 function openWorkerEditModal(worker) {
     document.getElementById('edit-worker-title').textContent = 'Edit Worker: ' + worker.full_name + ' (' + worker.worker_code + ')';
     document.getElementById('edit-worker-form').action = '/attendance/worker/' + worker.id + '/update';

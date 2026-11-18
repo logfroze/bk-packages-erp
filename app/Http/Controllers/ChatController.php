@@ -179,7 +179,7 @@ class ChatController extends Controller
         }
 
         // Delete physical attachment from disk if present to free disk space
-        if (! empty($message->attachment_path)) {
+        if (! empty($message->attachment_path) && ! str_starts_with($message->attachment_path, 'data:')) {
             $fullPath = public_path($message->attachment_path);
             if (File::exists($fullPath)) {
                 @unlink($fullPath);
@@ -204,6 +204,59 @@ class ChatController extends Controller
     }
 
     /**
+     * Delete multiple selected messages at once (Bulk Delete for Everyone).
+     * Unlinks all physical attachment files from disk to prevent storage bloat.
+     */
+    public function deleteMultiple(Request $request): JsonResponse
+    {
+        $me = Auth::user();
+
+        $validated = $request->validate([
+            'message_ids' => 'required|array|min:1',
+            'message_ids.*' => 'integer|exists:chat_messages,id',
+        ]);
+
+        $query = ChatMessage::whereIn('id', $validated['message_ids']);
+
+        // Non-admins can only delete their own messages
+        if (! $me->isFullAdmin()) {
+            $query->where('sender_id', $me->id);
+        }
+
+        $messages = $query->with('sender')->get();
+        $updatedList = [];
+
+        foreach ($messages as $msg) {
+            if (! empty($msg->attachment_path) && ! str_starts_with($msg->attachment_path, 'data:')) {
+                $fullPath = public_path($msg->attachment_path);
+                if (File::exists($fullPath)) {
+                    @unlink($fullPath);
+                }
+            }
+
+            $msg->update([
+                'is_deleted' => true,
+                'deleted_by' => $me->id,
+                'message_text' => null,
+                'attachment_path' => null,
+                'attachment_name' => null,
+                'attachment_type' => null,
+                'attachment_mime' => null,
+                'attachment_size' => null,
+            ]);
+
+            $updatedList[] = $this->formatMessage($msg->fresh('sender'), $me->id);
+        }
+
+        return response()->json([
+            'success' => true,
+            'deleted_count' => count($updatedList),
+            'messages' => $updatedList,
+            'message' => count($updatedList) . ' message(s) deleted.',
+        ]);
+    }
+
+    /**
      * Clear / Delete the entire chat history for the active conversation.
      * Deletes all attachment files from public/uploads/chat to immediately reclaim disk space.
      */
@@ -222,9 +275,11 @@ class ChatController extends Controller
         // 1. Reclaim disk space by deleting all physical attachment files
         $attachments = (clone $query)->whereNotNull('attachment_path')->pluck('attachment_path');
         foreach ($attachments as $filePath) {
-            $fullPath = public_path($filePath);
-            if (File::exists($fullPath)) {
-                @unlink($fullPath);
+            if ($filePath && ! str_starts_with($filePath, 'data:')) {
+                $fullPath = public_path($filePath);
+                if (File::exists($fullPath)) {
+                    @unlink($fullPath);
+                }
             }
         }
 
@@ -265,9 +320,11 @@ class ChatController extends Controller
         // Delete physical files
         $attachments = (clone $query)->whereNotNull('attachment_path')->pluck('attachment_path');
         foreach ($attachments as $filePath) {
-            $fullPath = public_path($filePath);
-            if (File::exists($fullPath)) {
-                @unlink($fullPath);
+            if ($filePath && ! str_starts_with($filePath, 'data:')) {
+                $fullPath = public_path($filePath);
+                if (File::exists($fullPath)) {
+                    @unlink($fullPath);
+                }
             }
         }
 
@@ -325,15 +382,24 @@ class ChatController extends Controller
                 $attachmentType = 'document';
             }
 
-            // Upload directly to public/uploads/chat for instant zero-config serving
-            $uploadDir = public_path('uploads/chat');
-            if (! File::isDirectory($uploadDir)) {
-                File::makeDirectory($uploadDir, 0777, true, true);
-            }
+            try {
+                $uploadDir = public_path('uploads/chat');
+                if (! File::isDirectory($uploadDir)) {
+                    @File::makeDirectory($uploadDir, 0777, true, true);
+                }
 
-            $fileName = 'chat_'.time().'_'.uniqid().'.'.($ext ?: 'bin');
-            $file->move($uploadDir, $fileName);
-            $attachmentPath = '/uploads/chat/'.$fileName;
+                $fileName = 'chat_'.time().'_'.uniqid().'.'.($ext ?: 'bin');
+                $file->move($uploadDir, $fileName);
+                $attachmentPath = '/uploads/chat/'.$fileName;
+            } catch (\Throwable $e) {
+                // Serverless read-only filesystem fallback: base64 Data URI
+                try {
+                    $content = @file_get_contents($file->getRealPath());
+                    if ($content !== false) {
+                        $attachmentPath = 'data:' . ($attachmentMime ?: 'application/octet-stream') . ';base64,' . base64_encode($content);
+                    }
+                } catch (\Throwable $ex) {}
+            }
         }
 
         $message = ChatMessage::create([

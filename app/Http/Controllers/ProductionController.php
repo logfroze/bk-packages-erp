@@ -8,6 +8,7 @@ use App\Models\Party;
 use App\Models\ProductionBatch;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -17,15 +18,15 @@ class ProductionController extends Controller
     {
         $statusFilter = $request->get('status', 'ALL');
 
-        $query = ProductionBatch::with(['cartonProduct', 'client'])->latest();
+        $query = ProductionBatch::with(['cartonProduct', 'client'])->latest('id');
 
         if ($statusFilter !== 'ALL') {
             $query->where('status', $statusFilter);
         }
 
-        $batches = $query->get();
-        $cartonProducts = CartonProduct::with('client')->orderBy('box_title')->get();
-        $customers = Party::where('type', 'CUSTOMER')->orderBy('name')->get();
+        $batches = $query->take(50)->get();
+        $cartonProducts = Cache::remember('all_cartons_with_client', 60, fn() => CartonProduct::with('client')->orderBy('box_title')->get());
+        $customers = Cache::remember('customers_sorted', 60, fn() => Party::where('type', 'CUSTOMER')->orderBy('name')->get());
         $customCards = CustomErpCard::forPage('production')->latest()->get();
 
         return view('production.index', compact('batches', 'cartonProducts', 'customers', 'statusFilter', 'customCards'));
@@ -96,6 +97,43 @@ class ProductionController extends Controller
         return back()->with('success', 'Production batch recorded and finished stock updated.');
     }
 
+    public function update(Request $request, ProductionBatch $batch): RedirectResponse
+    {
+        $validated = $request->validate([
+            'carton_product_id' => 'required|exists:carton_products,id',
+            'target_quantity' => 'required|integer|min:1',
+            'produced_quantity' => 'required|integer|min:0',
+            'shift' => 'required|string',
+            'current_machine' => 'required|string',
+            'status' => 'required|string',
+            'due_date' => 'nullable|date',
+        ]);
+
+        $product = CartonProduct::findOrFail($validated['carton_product_id']);
+
+        $batch->update([
+            'carton_product_id' => $product->id,
+            'client_id' => $product->client_id,
+            'shift' => $validated['shift'],
+            'target_quantity' => (int) $validated['target_quantity'],
+            'produced_quantity' => (int) $validated['produced_quantity'],
+            'current_machine' => $validated['current_machine'],
+            'status' => $validated['status'],
+            'due_date' => $validated['due_date'] ?? $batch->due_date,
+            'finished_at' => $validated['status'] === 'COMPLETED' ? ($batch->finished_at ?? now()) : null,
+        ]);
+
+        return back()->with('success', "Production batch {$batch->batch_number} updated.");
+    }
+
+    public function destroy(ProductionBatch $batch): RedirectResponse
+    {
+        $num = $batch->batch_number;
+        $batch->delete();
+
+        return back()->with('success', "Production batch [{$num}] deleted.");
+    }
+
     public function recordOutput(Request $request, ProductionBatch $batch): RedirectResponse
     {
         $validated = $request->validate([
@@ -104,7 +142,7 @@ class ProductionController extends Controller
             'mark_completed' => 'nullable|boolean',
         ]);
 
-        DB::transaction(function () use ($validated, $batch) {
+        DB::transaction(function () use ($request, $validated, $batch) {
             $addPieces = (int) $validated['add_pieces'];
             $rejected = (int) ($validated['rejected_pieces'] ?? 0);
 
@@ -129,4 +167,3 @@ class ProductionController extends Controller
         return back()->with('success', "Added {$validated['add_pieces']} pcs to {$batch->batch_number} and updated Finished Godown stock.");
     }
 }
-

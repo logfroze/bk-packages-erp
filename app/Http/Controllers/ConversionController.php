@@ -250,5 +250,38 @@ class ConversionController extends Controller
         $run->load(['client', 'cartonProduct', 'reel1.rawMaterial', 'reel2.rawMaterial', 'sheetCuts']);
         return view('production.conversion_report', compact('run'));
     }
+
+    public function destroy(ConversionRun $run): RedirectResponse
+    {
+        $code = $run->run_code;
+
+        DB::transaction(function () use ($run) {
+            $restoreReel = function (?int $reelId, float $usedKg): void {
+                if (! $reelId || $usedKg <= 0) {
+                    return;
+                }
+                $reel = PaperReel::find($reelId);
+                if ($reel) {
+                    $newWeight = (float) $reel->remaining_weight_kg + $usedKg;
+                    $reel->update([
+                        'remaining_weight_kg' => $newWeight,
+                        'status' => 'IN_STOCK',
+                    ]);
+                    if ($reel->raw_material_id) {
+                        RawMaterial::where('id', $reel->raw_material_id)
+                            ->increment('total_stock_qty', $usedKg);
+                    }
+                }
+            };
+
+            $restoreReel($run->reel_1_id, (float) $run->reel_1_used_kg);
+            $restoreReel($run->reel_2_id, (float) $run->reel_2_used_kg);
+            $restoreReel($run->reel_3_id, (float) $run->reel_3_used_kg);
+
+            $run->delete();
+        });
+
+        return back()->with('success', "Conversion run '{$code}' deleted and consumed paper weights restored.");
+    }
 }
 

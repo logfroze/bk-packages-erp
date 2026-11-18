@@ -40,7 +40,9 @@
 
             <!-- 1. Factory General Group Channel -->
             <a href="{{ route('chat.index', ['type' => 'group']) }}"
-               class="flex items-center gap-3 p-2.5 rounded-lg transition-all {{ $activeType === 'group' ? 'bg-white border border-slate-400 shadow-xs' : 'hover:bg-slate-200/60 border border-transparent text-slate-700' }}">
+               id="conv-link-group"
+               onclick="switchConversation(event, 'group', '', 'Okara Factory Team Channel', '3 Members', 'Mirza Sohail · Dr. Ghulam Abbas (Manager) · Company Owner', 'groups', true)"
+               class="conversation-link flex items-center gap-3 p-2.5 rounded-lg transition-all {{ $activeType === 'group' ? 'bg-white border border-slate-400 shadow-xs' : 'hover:bg-slate-200/60 border border-transparent text-slate-700' }}">
                 <div class="w-9 h-9 rounded-lg bg-slate-900 text-white font-bold flex items-center justify-center text-xs shrink-0 border border-slate-900">
                     <span class="material-symbols-outlined text-[18px]">groups</span>
                 </div>
@@ -69,7 +71,9 @@
                     };
                 @endphp
                 <a href="{{ route('chat.index', ['type' => 'user', 'user_id' => $contact->id]) }}"
-                   class="flex items-center gap-3 p-2.5 rounded-lg transition-all relative {{ $isActive ? 'bg-white border border-slate-400 shadow-xs' : 'hover:bg-slate-200/60 border border-transparent text-slate-700' }}">
+                   id="conv-link-user-{{ $contact->id }}"
+                   onclick="switchConversation(event, 'user', {{ $contact->id }}, @js($contact->name), @js($roleLabel), @js($contact->email), @js($contact->initials()), false)"
+                   class="conversation-link flex items-center gap-3 p-2.5 rounded-lg transition-all relative {{ $isActive ? 'bg-white border border-slate-400 shadow-xs' : 'hover:bg-slate-200/60 border border-transparent text-slate-700' }}">
                     <div class="relative shrink-0">
                         <div class="w-9 h-9 rounded-lg bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center border border-slate-300">
                             {{ $contact->initials() }}
@@ -81,7 +85,7 @@
                         <div class="flex items-center justify-between">
                             <span class="font-bold text-xs truncate text-slate-900">{{ $contact->name }}</span>
                             @if($unread > 0)
-                                <span class="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-slate-900 text-white shrink-0">
+                                <span class="conv-unread-badge px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-slate-900 text-white shrink-0">
                                     {{ $unread }}
                                 </span>
                             @endif
@@ -105,37 +109,36 @@
         <!-- Active Chat Header -->
         <div class="px-5 py-3 bg-white border-b border-slate-300 flex items-center justify-between shrink-0">
             <div class="flex items-center gap-3 min-w-0">
-                @if($activeType === 'group')
-                    <div class="w-9 h-9 rounded-lg bg-slate-900 text-white font-bold flex items-center justify-center shrink-0 border border-slate-900">
+                <div id="chat-header-avatar" class="w-9 h-9 rounded-lg {{ $activeType === 'group' ? 'bg-slate-900 border-slate-900' : 'bg-navy-900 border-navy-900' }} text-white font-bold text-xs flex items-center justify-center shrink-0 border">
+                    @if($activeType === 'group')
                         <span class="material-symbols-outlined text-[18px]">groups</span>
-                    </div>
-                    <div>
-                        <div class="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
-                            <span>Okara Factory Team Channel</span>
-                            <span class="px-2 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                                3 Members
-                            </span>
-                        </div>
-                        <p class="text-[10px] text-slate-500">Mirza Sohail · Dr. Ghulam Abbas (Manager) · Company Owner</p>
-                    </div>
-                @else
-                    <div class="w-9 h-9 rounded-lg bg-navy-900 text-white font-bold text-xs flex items-center justify-center shrink-0 border border-navy-900">
+                    @else
                         {{ $activeUser->initials() }}
+                    @endif
+                </div>
+                <div>
+                    <div class="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
+                        <span id="chat-header-title">{{ $activeType === 'group' ? 'Okara Factory Team Channel' : $activeUser->name }}</span>
+                        <span id="chat-header-badge" class="px-2 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                            {{ $activeType === 'group' ? '3 Members' : $activeUser->role }}
+                        </span>
                     </div>
-                    <div>
-                        <div class="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
-                            <span>{{ $activeUser->name }}</span>
-                            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                                {{ $activeUser->role }}
-                            </span>
-                        </div>
-                        <p class="text-[10px] text-slate-500 font-mono">{{ $activeUser->email }}</p>
-                    </div>
-                @endif
+                    <p id="chat-header-sub" class="text-[10px] text-slate-500 font-mono">
+                        {{ $activeType === 'group' ? 'Mirza Sohail · Dr. Ghulam Abbas (Manager) · Company Owner' : $activeUser->email }}
+                    </p>
+                </div>
             </div>
 
             <!-- Action buttons: Minimalist Solid Clean Style -->
             <div class="flex items-center gap-2">
+                <!-- Select Multiple Messages Trigger -->
+                <button type="button" id="btn-toggle-select" onclick="toggleMultiSelectMode()"
+                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 shadow-2xs transition-colors flex items-center gap-1.5"
+                        title="Select Multiple Messages to Delete">
+                    <span class="material-symbols-outlined text-[16px] text-slate-600">checklist</span>
+                    <span class="hidden md:inline" id="btn-select-text">Select</span>
+                </button>
+
                 <!-- Storage Management & Auto-Clean Modal Trigger -->
                 <button type="button" onclick="openModal('modal-storage-cleanup')"
                         class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 shadow-2xs transition-colors flex items-center gap-1.5"
@@ -168,107 +171,114 @@
                     $isMe = ($msg->sender_id === auth()->id());
                     $canModify = $isMe || auth()->user()->isFullAdmin();
                 @endphp
-                <div class="flex flex-col {{ $isMe ? 'items-end' : 'items-start' }} message-node group relative" data-id="{{ $msg->id }}">
-                    <!-- Sender Name for Group Chat -->
-                    @if(!$isMe && $activeType === 'group' && !$msg->is_deleted)
-                        <span class="text-[10px] font-bold text-slate-600 mb-1 ml-1 flex items-center gap-1.5">
-                            <span>{{ $msg->sender->name ?? 'User' }}</span>
-                            <span class="text-[9px] font-normal text-slate-400">({{ $msg->sender->role ?? '' }})</span>
-                        </span>
-                    @endif
+                <div class="flex {{ $isMe ? 'flex-row-reverse' : 'flex-row' }} items-center gap-2 w-full message-row group relative" data-id="{{ $msg->id }}">
+                    <!-- Multi-Select Checkbox -->
+                    <div class="msg-select-wrap hidden items-center px-1 shrink-0">
+                        <input type="checkbox" class="msg-checkbox w-4 h-4 rounded border-slate-400 text-slate-900 focus:ring-slate-900 cursor-pointer" data-id="{{ $msg->id }}" onchange="handleMessageCheckboxChange(event, {{ $msg->id }})">
+                    </div>
 
-                    <div class="relative max-w-[85%] sm:max-w-md md:max-w-lg">
-                        <!-- Floating Action Pill Menu (WhatsApp-style Edit & Delete) -->
-                        @if($canModify && !$msg->is_deleted)
-                            <div class="absolute -top-3 {{ $isMe ? 'right-2' : 'left-2' }} hidden group-hover:flex items-center gap-0.5 bg-white shadow-xs border border-slate-300 rounded-lg p-0.5 z-10">
-                                @if($msg->message_text)
-                                    <button type="button" onclick="startEditMessage({{ $msg->id }}, @js($msg->message_text))"
-                                            class="p-1 rounded text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-                                            title="Edit Message">
-                                        <span class="material-symbols-outlined text-[15px]">edit</span>
+                    <div class="flex flex-col {{ $isMe ? 'items-end' : 'items-start' }} message-node relative max-w-[85%] sm:max-w-md md:max-w-lg" data-id="{{ $msg->id }}">
+                        <!-- Sender Name for Group Chat -->
+                        @if(!$isMe && $activeType === 'group' && !$msg->is_deleted)
+                            <span class="text-[10px] font-bold text-slate-600 mb-1 ml-1 flex items-center gap-1.5">
+                                <span>{{ $msg->sender->name ?? 'User' }}</span>
+                                <span class="text-[9px] font-normal text-slate-400">({{ $msg->sender->role ?? '' }})</span>
+                            </span>
+                        @endif
+
+                        <div class="relative w-full">
+                            <!-- Floating Action Pill Menu (WhatsApp-style Edit & Delete) -->
+                            @if($canModify && !$msg->is_deleted)
+                                <div class="absolute -top-3 {{ $isMe ? 'right-2' : 'left-2' }} hidden group-hover:flex items-center gap-0.5 bg-white shadow-xs border border-slate-300 rounded-lg p-0.5 z-10">
+                                    @if($msg->message_text)
+                                        <button type="button" onclick="startEditMessage({{ $msg->id }}, @js($msg->message_text))"
+                                                class="p-1 rounded text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                                                title="Edit Message">
+                                            <span class="material-symbols-outlined text-[15px]">edit</span>
+                                        </button>
+                                    @endif
+                                    <button type="button" onclick="confirmDeleteMessage({{ $msg->id }})"
+                                            class="p-1 rounded text-slate-600 hover:text-rose-700 hover:bg-slate-100 transition-colors"
+                                            title="Delete Message">
+                                        <span class="material-symbols-outlined text-[15px]">delete</span>
                                     </button>
-                                @endif
-                                <button type="button" onclick="confirmDeleteMessage({{ $msg->id }})"
-                                        class="p-1 rounded text-slate-600 hover:text-rose-700 hover:bg-slate-100 transition-colors"
-                                        title="Delete Message">
-                                    <span class="material-symbols-outlined text-[15px]">delete</span>
-                                </button>
-                            </div>
-                        @endif
-
-                        <!-- Message Content Bubble -->
-                        @if($msg->is_deleted)
-                            <!-- WhatsApp-Style Deleted Message Placeholder -->
-                            <div class="rounded-xl px-3.5 py-2.5 shadow-2xs italic text-xs flex items-center gap-2 bg-slate-100 text-slate-600 border border-slate-300 {{ $isMe ? 'rounded-tr-xs' : 'rounded-tl-xs' }}">
-                                <span class="material-symbols-outlined text-[15px] text-slate-500">block</span>
-                                <span>{{ ($msg->deleted_by === auth()->id()) ? 'You deleted this message' : 'This message was deleted' }}</span>
-                                <span class="text-[10px] text-slate-400 not-italic ml-auto">{{ $msg->formattedTime() }}</span>
-                            </div>
-                        @else
-                            <div class="rounded-xl p-3.5 shadow-2xs {{ $isMe ? 'bg-navy-900 text-white border border-navy-800 rounded-tr-xs' : 'bg-white text-slate-900 border border-slate-300 rounded-tl-xs' }}">
-                                <!-- 1. IMAGE ATTACHMENT -->
-                                @if($msg->attachment_path && $msg->isImage())
-                                    <div class="mb-2 overflow-hidden rounded-lg bg-black/5 border border-slate-300/50">
-                                        <a href="{{ $msg->attachment_path }}" target="_blank" rel="noopener">
-                                            <img src="{{ $msg->attachment_path }}" alt="Image attachment" class="rounded-lg max-h-72 w-auto object-cover hover:opacity-95 transition-opacity" />
-                                        </a>
-                                    </div>
-                                @endif
-
-                                <!-- 2. AUDIO / VOICE NOTE ATTACHMENT -->
-                                @if($msg->attachment_path && $msg->isAudio())
-                                    <div class="mb-2 p-2 rounded-lg {{ $isMe ? 'bg-navy-800 text-white border border-navy-700' : 'bg-slate-100 text-slate-800 border border-slate-300' }}">
-                                        <div class="flex items-center gap-2 mb-1.5 text-xs font-semibold">
-                                            <span class="material-symbols-outlined text-[17px] text-slate-300">graphic_eq</span>
-                                            <span>Voice Note</span>
-                                            @if($msg->formattedSize())
-                                                <span class="text-[10px] opacity-70">({{ $msg->formattedSize() }})</span>
-                                            @endif
-                                        </div>
-                                        <audio controls class="w-full h-8" preload="metadata">
-                                            <source src="{{ $msg->attachment_path }}" type="{{ $msg->attachment_mime ?: 'audio/mpeg' }}">
-                                            Your browser does not support audio playback.
-                                        </audio>
-                                    </div>
-                                @endif
-
-                                <!-- 3. PDF & DOCUMENT ATTACHMENT -->
-                                @if($msg->attachment_path && !$msg->isImage() && !$msg->isAudio())
-                                    <div class="mb-2 p-2.5 rounded-lg flex items-center justify-between gap-3 {{ $isMe ? 'bg-navy-800 text-white border border-navy-700' : 'bg-slate-100 text-slate-800 border border-slate-300' }}">
-                                        <div class="flex items-center gap-2.5 min-w-0">
-                                            <span class="material-symbols-outlined text-[22px] {{ $msg->isPdf() ? 'text-red-400' : 'text-slate-300' }}">
-                                                {{ $msg->isPdf() ? 'picture_as_pdf' : 'description' }}
-                                            </span>
-                                            <div class="min-w-0">
-                                                <div class="text-xs font-bold truncate">{{ $msg->attachment_name ?: 'Document' }}</div>
-                                                <div class="text-[10px] opacity-70">{{ $msg->formattedSize() }}</div>
-                                            </div>
-                                        </div>
-                                        <a href="{{ $msg->attachment_path }}" download="{{ $msg->attachment_name }}"
-                                           class="px-2.5 py-1 rounded bg-slate-900 hover:bg-black text-white border border-slate-700 text-[11px] font-semibold shrink-0 flex items-center gap-1 transition-colors">
-                                            <span class="material-symbols-outlined text-[13px]">download</span>
-                                            <span>Download</span>
-                                        </a>
-                                    </div>
-                                @endif
-
-                                <!-- TEXT MESSAGE CONTENT -->
-                                @if($msg->message_text)
-                                    <p class="text-xs leading-relaxed whitespace-pre-wrap select-text break-words message-body">{{ $msg->message_text }}</p>
-                                @endif
-
-                                <!-- Timestamp, Edited status & Read Receipt -->
-                                <div class="flex items-center justify-end gap-1 mt-1 text-[10px] {{ $isMe ? 'text-slate-400' : 'text-slate-400' }}">
-                                    @if($msg->is_edited)
-                                        <span class="text-[9px] text-slate-400 italic font-normal mr-0.5">(edited)</span>
-                                    @endif
-                                    <span>{{ $msg->formattedTime() }}</span>
-                                    @if($isMe)
-                                        <span class="material-symbols-outlined text-[13px] {{ $msg->is_read ? 'text-blue-400' : 'text-slate-400' }}">done_all</span>
-                                    @endif
                                 </div>
-                            </div>
-                        @endif
+                            @endif
+
+                            <!-- Message Content Bubble -->
+                            @if($msg->is_deleted)
+                                <!-- WhatsApp-Style Deleted Message Placeholder -->
+                                <div class="rounded-xl px-3.5 py-2.5 shadow-2xs italic text-xs flex items-center gap-2 bg-slate-100 text-slate-600 border border-slate-300 {{ $isMe ? 'rounded-tr-xs' : 'rounded-tl-xs' }}">
+                                    <span class="material-symbols-outlined text-[15px] text-slate-500">block</span>
+                                    <span>{{ ($msg->deleted_by === auth()->id()) ? 'You deleted this message' : 'This message was deleted' }}</span>
+                                    <span class="text-[10px] text-slate-400 not-italic ml-auto">{{ $msg->formattedTime() }}</span>
+                                </div>
+                            @else
+                                <div class="rounded-xl p-3.5 shadow-2xs {{ $isMe ? 'bg-navy-900 text-white border border-navy-800 rounded-tr-xs' : 'bg-white text-slate-900 border border-slate-300 rounded-tl-xs' }}">
+                                    <!-- 1. IMAGE ATTACHMENT -->
+                                    @if($msg->attachment_path && $msg->isImage())
+                                        <div class="mb-2 overflow-hidden rounded-lg bg-black/5 border border-slate-300/50">
+                                            <a href="{{ $msg->attachment_path }}" target="_blank" rel="noopener">
+                                                <img src="{{ $msg->attachment_path }}" alt="Image attachment" class="rounded-lg max-h-72 w-auto object-cover hover:opacity-95 transition-opacity" />
+                                            </a>
+                                        </div>
+                                    @endif
+
+                                    <!-- 2. AUDIO / VOICE NOTE ATTACHMENT -->
+                                    @if($msg->attachment_path && $msg->isAudio())
+                                        <div class="mb-2 p-2 rounded-lg {{ $isMe ? 'bg-navy-800 text-white border border-navy-700' : 'bg-slate-100 text-slate-800 border border-slate-300' }}">
+                                            <div class="flex items-center gap-2 mb-1.5 text-xs font-semibold">
+                                                <span class="material-symbols-outlined text-[17px] text-slate-300">graphic_eq</span>
+                                                <span>Voice Note</span>
+                                                @if($msg->formattedSize())
+                                                    <span class="text-[10px] opacity-70">({{ $msg->formattedSize() }})</span>
+                                                @endif
+                                            </div>
+                                            <audio controls class="w-full h-8" preload="metadata">
+                                                <source src="{{ $msg->attachment_path }}" type="{{ $msg->attachment_mime ?: 'audio/mpeg' }}">
+                                                Your browser does not support audio playback.
+                                            </audio>
+                                        </div>
+                                    @endif
+
+                                    <!-- 3. PDF & DOCUMENT ATTACHMENT -->
+                                    @if($msg->attachment_path && !$msg->isImage() && !$msg->isAudio())
+                                        <div class="mb-2 p-2.5 rounded-lg flex items-center justify-between gap-3 {{ $isMe ? 'bg-navy-800 text-white border border-navy-700' : 'bg-slate-100 text-slate-800 border border-slate-300' }}">
+                                            <div class="flex items-center gap-2.5 min-w-0">
+                                                <span class="material-symbols-outlined text-[22px] {{ $msg->isPdf() ? 'text-red-400' : 'text-slate-300' }}">
+                                                    {{ $msg->isPdf() ? 'picture_as_pdf' : 'description' }}
+                                                </span>
+                                                <div class="min-w-0">
+                                                    <div class="text-xs font-bold truncate">{{ $msg->attachment_name ?: 'Document' }}</div>
+                                                    <div class="text-[10px] opacity-70">{{ $msg->formattedSize() }}</div>
+                                                </div>
+                                            </div>
+                                            <a href="{{ $msg->attachment_path }}" download="{{ $msg->attachment_name }}"
+                                               class="px-2.5 py-1 rounded bg-slate-900 hover:bg-black text-white border border-slate-700 text-[11px] font-semibold shrink-0 flex items-center gap-1 transition-colors">
+                                                <span class="material-symbols-outlined text-[13px]">download</span>
+                                                <span>Download</span>
+                                            </a>
+                                        </div>
+                                    @endif
+
+                                    <!-- TEXT MESSAGE CONTENT -->
+                                    @if($msg->message_text)
+                                        <p class="text-xs leading-relaxed whitespace-pre-wrap select-text break-words message-body">{{ $msg->message_text }}</p>
+                                    @endif
+
+                                    <!-- Timestamp, Edited status & Read Receipt -->
+                                    <div class="flex items-center justify-end gap-1 mt-1 text-[10px] {{ $isMe ? 'text-slate-400' : 'text-slate-400' }}">
+                                        @if($msg->is_edited)
+                                            <span class="text-[9px] text-slate-400 italic font-normal mr-0.5">(edited)</span>
+                                        @endif
+                                        <span>{{ $msg->formattedTime() }}</span>
+                                        @if($isMe)
+                                            <span class="material-symbols-outlined text-[13px] {{ $msg->is_read ? 'text-blue-400' : 'text-slate-400' }}">done_all</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
                     </div>
                 </div>
             @empty
@@ -284,6 +294,27 @@
         <!-- BOTTOM INPUT & MULTIMEDIA ACTION BAR       -->
         <!-- ========================================== -->
         <div class="p-3 bg-white border-t border-slate-300">
+            <!-- Multi-Select Floating Action Bar -->
+            <div id="multi-select-bar" class="hidden mb-2 p-2.5 rounded-lg bg-slate-900 text-white border border-slate-800 shadow-md flex items-center justify-between gap-3 text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="material-symbols-outlined text-[18px] text-amber-400">checklist</span>
+                    <span id="selected-count-label" class="font-bold text-white font-mono">0 messages selected</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="selectAllMessages()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors">
+                        Select All
+                    </button>
+                    <button type="button" onclick="toggleMultiSelectMode(false)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="button" id="btn-delete-selected" onclick="confirmDeleteSelected()" disabled
+                            class="px-3 py-1 rounded bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors flex items-center gap-1 shadow-xs">
+                        <span class="material-symbols-outlined text-[15px]">delete</span>
+                        <span>Delete Selected</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- Inline Message Editing Banner -->
             <div id="editing-banner" class="hidden mb-2 p-2 rounded-lg bg-slate-100 border border-slate-300 flex items-center justify-between gap-3 text-slate-800 text-xs">
                 <div class="flex items-center gap-2 min-w-0">
@@ -399,6 +430,47 @@
                 <button type="button" id="btn-confirm-delete" onclick="executeDeleteMessage()"
                         class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-black border border-slate-900 transition-colors flex items-center gap-1.5 shadow-xs">
                     <span class="material-symbols-outlined text-[15px]">delete</span>
+                    <span>Delete for Everyone</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL: CONFIRM BULK DELETE MESSAGES        -->
+<!-- ========================================== -->
+<div id="modal-bulk-delete" class="hidden fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity" onclick="closeModal('modal-bulk-delete')"></div>
+        <div class="relative inline-block w-full max-w-sm overflow-hidden text-left align-middle transition-all transform bg-white rounded-xl border border-slate-300 shadow-xl">
+            <!-- Header -->
+            <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div class="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                    <span class="material-symbols-outlined text-[18px] text-rose-600">delete</span>
+                    <span>Delete Selected Messages?</span>
+                </div>
+                <button type="button" onclick="closeModal('modal-bulk-delete')" class="text-slate-400 hover:text-slate-700">
+                    <span class="material-symbols-outlined text-[18px]">close</span>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-5">
+                <p id="bulk-delete-confirm-text" class="text-xs text-slate-600 leading-relaxed">
+                    Are you sure you want to delete these messages for everyone? Any attached media files will also be permanently purged from the server disk.
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button type="button" onclick="closeModal('modal-bulk-delete')"
+                        class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 transition-colors">
+                    Cancel
+                </button>
+                <button type="button" id="btn-execute-bulk-delete" onclick="executeBulkDelete()"
+                        class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors flex items-center gap-1.5 shadow-xs">
+                    <span class="material-symbols-outlined text-[15px]">delete_forever</span>
                     <span>Delete for Everyone</span>
                 </button>
             </div>
@@ -552,8 +624,8 @@
 @push('scripts')
 <script>
     const currentUserId = {{ auth()->id() }};
-    const activeType = '{{ $activeType }}';
-    const receiverId = '{{ $activeUser ? $activeUser->id : '' }}';
+    let currentActiveType = '{{ $activeType }}';
+    let currentReceiverId = '{{ $activeUser ? $activeUser->id : '' }}';
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     let lastMessageId = 0;
@@ -562,8 +634,15 @@
     let editingMessageId = null;
     let deletingMessageId = null;
 
+    // Multi-Select Delete State
+    let isSelectMode = false;
+    const selectedMessageIds = new Set();
+
+    // In-Memory Instant Client Cache
+    const conversationCache = {};
+
     // Track highest message id already in DOM
-    document.querySelectorAll('.message-node').forEach(el => {
+    document.querySelectorAll('.message-row').forEach(el => {
         const id = parseInt(el.getAttribute('data-id')) || 0;
         if (id > lastMessageId) lastMessageId = id;
     });
@@ -576,6 +655,239 @@
         }
     }
     scrollToBottom();
+
+    // ========================================================
+    // MULTI-SELECT MESSAGES & BULK DELETE ENGINE
+    // ========================================================
+    function toggleMultiSelectMode(forcedState) {
+        isSelectMode = (forcedState !== undefined) ? forcedState : !isSelectMode;
+        const selectBar = document.getElementById('multi-select-bar');
+        const selectBtnText = document.getElementById('btn-select-text');
+        const selectWraps = document.querySelectorAll('.msg-select-wrap');
+
+        if (isSelectMode) {
+            if (selectBar) selectBar.classList.remove('hidden');
+            if (selectBtnText) selectBtnText.innerText = 'Cancel';
+            selectWraps.forEach(el => el.classList.remove('hidden'));
+        } else {
+            if (selectBar) selectBar.classList.add('hidden');
+            if (selectBtnText) selectBtnText.innerText = 'Select';
+            selectWraps.forEach(el => el.classList.add('hidden'));
+            selectedMessageIds.clear();
+            document.querySelectorAll('.msg-checkbox').forEach(cb => { cb.checked = false; });
+            updateSelectBar();
+        }
+    }
+
+    function handleMessageCheckboxChange(e, id) {
+        if (e.target.checked) {
+            selectedMessageIds.add(id);
+        } else {
+            selectedMessageIds.delete(id);
+        }
+        updateSelectBar();
+    }
+
+    function updateSelectBar() {
+        const count = selectedMessageIds.size;
+        const label = document.getElementById('selected-count-label');
+        const btnDelete = document.getElementById('btn-delete-selected');
+        if (label) label.innerText = `${count} message${count === 1 ? '' : 's'} selected`;
+        if (btnDelete) btnDelete.disabled = (count === 0);
+    }
+
+    function selectAllMessages() {
+        const checkboxes = document.querySelectorAll('.msg-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = true;
+            const id = parseInt(cb.getAttribute('data-id'));
+            if (id) selectedMessageIds.add(id);
+        });
+        updateSelectBar();
+    }
+
+    function confirmDeleteSelected() {
+        const count = selectedMessageIds.size;
+        if (count === 0) return;
+        const textEl = document.getElementById('bulk-delete-confirm-text');
+        if (textEl) {
+            textEl.innerText = `Are you sure you want to delete ${count} selected message${count === 1 ? '' : 's'} for everyone? Any attached photos, documents, or voice notes will also be permanently removed from disk.`;
+        }
+        openModal('modal-bulk-delete');
+    }
+
+    function executeBulkDelete() {
+        const ids = Array.from(selectedMessageIds);
+        if (ids.length === 0) return;
+
+        const btn = document.getElementById('btn-execute-bulk-delete');
+        btn.disabled = true;
+
+        fetch('{{ route('chat.delete_multiple') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ message_ids: ids })
+        })
+        .then(r => r.json())
+        .then(res => {
+            btn.disabled = false;
+            closeModal('modal-bulk-delete');
+            if (res.success && res.messages) {
+                res.messages.forEach(m => {
+                    updateMessageInDom(m);
+                });
+                toggleMultiSelectMode(false);
+            } else if (res.error) {
+                alert(res.error);
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            closeModal('modal-bulk-delete');
+            console.error('Bulk delete error:', err);
+        });
+    }
+
+    // ========================================================
+    // LIGHTNING-FAST INSTANT CONVERSATION SWITCHER (0ms SPA)
+    // ========================================================
+    function switchConversation(e, type, userId, name, role, subtext, iconOrInitials, isGroup) {
+        if (e) e.preventDefault();
+
+        // If clicking currently active conversation, do nothing
+        if (currentActiveType === type && String(currentReceiverId) === String(userId || '')) {
+            return;
+        }
+
+        // Cancel edit or select mode if in progress
+        if (editingMessageId) cancelEditing();
+        if (isSelectMode) toggleMultiSelectMode(false);
+        cancelAttachment();
+
+        // 1. Update State Variables Immediately
+        currentActiveType = type;
+        currentReceiverId = userId ? String(userId) : '';
+        lastSyncTime = new Date().toISOString();
+
+        // 2. Update Left Sidebar Active Highlight Instantly
+        document.querySelectorAll('.conversation-link').forEach(link => {
+            link.classList.remove('bg-white', 'border-slate-400', 'shadow-xs');
+            link.classList.add('hover:bg-slate-200/60', 'border-transparent', 'text-slate-700');
+        });
+
+        const activeLink = isGroup 
+            ? document.getElementById('conv-link-group')
+            : document.getElementById(`conv-link-user-${userId}`);
+        if (activeLink) {
+            activeLink.classList.remove('hover:bg-slate-200/60', 'border-transparent', 'text-slate-700');
+            activeLink.classList.add('bg-white', 'border-slate-400', 'shadow-xs');
+            const badge = activeLink.querySelector('.conv-unread-badge');
+            if (badge) badge.remove();
+        }
+
+        // 3. Update Active Header Instantly (0ms response)
+        const headerTitle = document.getElementById('chat-header-title');
+        const headerBadge = document.getElementById('chat-header-badge');
+        const headerSub = document.getElementById('chat-header-sub');
+        const headerAvatar = document.getElementById('chat-header-avatar');
+
+        if (headerTitle) headerTitle.innerText = name;
+        if (headerBadge) headerBadge.innerText = role;
+        if (headerSub) headerSub.innerText = subtext;
+        if (headerAvatar) {
+            if (isGroup) {
+                headerAvatar.className = 'w-9 h-9 rounded-lg bg-slate-900 border-slate-900 text-white font-bold text-xs flex items-center justify-center shrink-0 border';
+                headerAvatar.innerHTML = '<span class="material-symbols-outlined text-[18px]">groups</span>';
+            } else {
+                headerAvatar.className = 'w-9 h-9 rounded-lg bg-navy-900 border-navy-900 text-white font-bold text-xs flex items-center justify-center shrink-0 border';
+                headerAvatar.innerHTML = escapeHtml(iconOrInitials);
+            }
+        }
+
+        // 4. Update Form Inputs & Placeholder
+        const inputType = document.getElementById('chat-active-type');
+        const inputReceiver = document.getElementById('chat-receiver-id');
+        const messageInput = document.getElementById('message-input');
+
+        if (inputType) inputType.value = type;
+        if (inputReceiver) inputReceiver.value = userId || '';
+        if (messageInput) {
+            messageInput.placeholder = `Type a message to ${name}... (Enter to send, Shift+Enter for new line)`;
+        }
+
+        // 5. Update Address Bar without Reload
+        const newUrl = isGroup ? `{{ route('chat.index', ['type' => 'group']) }}` : `{{ route('chat.index') }}?type=user&user_id=${userId}`;
+        window.history.pushState({ type, userId, name, role, subtext, iconOrInitials, isGroup }, '', newUrl);
+
+        // 6. Check In-Memory Cache or Fetch Fresh
+        const cacheKey = `${type}_${userId || 'group'}`;
+        if (conversationCache[cacheKey]) {
+            renderConversationMessages(conversationCache[cacheKey]);
+            pollNewMessages();
+        } else {
+            messagesContainer.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400">
+                    <span class="material-symbols-outlined text-3xl mb-2 text-slate-400 animate-spin">progress_activity</span>
+                    <p class="text-xs text-slate-500 font-semibold">Loading conversation...</p>
+                </div>`;
+            lastMessageId = 0;
+
+            fetch(`{{ route('chat.messages') }}?type=${type}&receiver_id=${userId || ''}&after_id=0`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.messages) {
+                    conversationCache[cacheKey] = data.messages;
+                    if (currentActiveType === type && String(currentReceiverId) === String(userId || '')) {
+                        renderConversationMessages(data.messages);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Failed to load conversation:', err);
+            });
+        }
+    }
+
+    function renderConversationMessages(messages) {
+        messagesContainer.innerHTML = '';
+        lastMessageId = 0;
+
+        if (!messages || messages.length === 0) {
+            messagesContainer.innerHTML = `
+                <div id="no-messages-placeholder" class="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400">
+                    <span class="material-symbols-outlined text-4xl mb-2 text-slate-400">chat</span>
+                    <h4 class="font-bold text-slate-700 text-xs sm:text-sm">No messages yet in this conversation</h4>
+                    <p class="text-xs text-slate-400 max-w-sm mt-1">Start chatting by typing below. Send text, attach photos, or record voice memos.</p>
+                </div>`;
+            return;
+        }
+
+        messages.forEach(m => {
+            const div = document.createElement('div');
+            const isMe = m.is_me;
+            div.className = `flex ${isMe ? 'flex-row-reverse' : 'flex-row'} items-center gap-2 w-full message-row group relative`;
+            div.setAttribute('data-id', m.id);
+            div.innerHTML = buildMessageRowInnerHtml(m);
+            messagesContainer.appendChild(div);
+            if (m.id > lastMessageId) lastMessageId = m.id;
+        });
+
+        scrollToBottom();
+    }
+
+    // Handle Browser Back / Forward Buttons Seamlessly
+    window.addEventListener('popstate', (e) => {
+        if (e.state && e.state.type) {
+            switchConversation(null, e.state.type, e.state.userId, e.state.name, e.state.role, e.state.subtext, e.state.iconOrInitials, e.state.isGroup);
+        }
+    });
 
     // Key handling: Enter submits, Shift+Enter adds new line
     function handleKeyDown(e) {
@@ -592,7 +904,6 @@
         const file = e.target.files[0];
         if (!file) return;
 
-        // If editing a message, cancel edit mode when attaching a file
         if (editingMessageId) cancelEditing();
 
         const previewBar = document.getElementById('attachment-preview-bar');
@@ -734,7 +1045,7 @@
     }
 
     // ========================================================
-    // DELETE MESSAGE (WhatsApp-Style "Delete for Everyone")
+    // DELETE SINGLE MESSAGE (WhatsApp-Style)
     // ========================================================
     function confirmDeleteMessage(id) {
         deletingMessageId = id;
@@ -793,8 +1104,8 @@
                 'Accept': 'application/json'
             },
             body: JSON.stringify({
-                active_type: activeType,
-                receiver_id: receiverId || null
+                active_type: currentActiveType,
+                receiver_id: currentReceiverId || null
             })
         })
         .then(r => r.json())
@@ -802,6 +1113,8 @@
             btn.disabled = false;
             closeModal('modal-clear-chat');
             if (res.success) {
+                const cacheKey = `${currentActiveType}_${currentReceiverId || 'group'}`;
+                conversationCache[cacheKey] = [];
                 messagesContainer.innerHTML = `
                     <div id="no-messages-placeholder" class="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400">
                         <span class="material-symbols-outlined text-4xl mb-2 text-slate-400">chat</span>
@@ -927,6 +1240,12 @@
 
                 const placeholder = document.getElementById('no-messages-placeholder');
                 if (placeholder) placeholder.remove();
+
+                // Append to cache
+                const cacheKey = `${currentActiveType}_${currentReceiverId || 'group'}`;
+                if (conversationCache[cacheKey]) {
+                    conversationCache[cacheKey].push(res.message);
+                }
             } else if (res.error) {
                 alert(res.error);
             }
@@ -938,24 +1257,35 @@
     }
 
     // ========================================================
-    // DOM BUILDER & UPDATER (Shared Component Builder)
+    // DOM BUILDER & UPDATER
     // ========================================================
-    function buildMessageInnerHtml(m) {
+    function buildMessageRowInnerHtml(m) {
         const isMe = m.is_me;
-        let html = '';
+        const isChecked = selectedMessageIds.has(m.id);
+        const canModify = m.can_modify;
+
+        let html = `
+            <!-- Multi-Select Checkbox -->
+            <div class="msg-select-wrap ${isSelectMode ? 'flex' : 'hidden'} items-center px-1 shrink-0">
+                <input type="checkbox" class="msg-checkbox w-4 h-4 rounded border-slate-400 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                       data-id="${m.id}" ${isChecked ? 'checked' : ''} onchange="handleMessageCheckboxChange(event, ${m.id})">
+            </div>
+
+            <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} message-node relative max-w-[85%] sm:max-w-md md:max-w-lg" data-id="${m.id}">
+        `;
 
         // Sender name for group chat
-        if (!isMe && activeType === 'group' && !m.is_deleted) {
+        if (!isMe && currentActiveType === 'group' && !m.is_deleted) {
             html += `<span class="text-[10px] font-bold text-slate-600 mb-1 ml-1 flex items-center gap-1.5">
                         <span>${escapeHtml(m.sender_name)}</span>
                         <span class="text-[9px] font-normal text-slate-400">(${escapeHtml(m.sender_role)})</span>
                      </span>`;
         }
 
-        html += `<div class="relative max-w-[85%] sm:max-w-md md:max-w-lg">`;
+        html += `<div class="relative w-full">`;
 
         // Action menu (Edit / Delete)
-        if (m.can_modify && !m.is_deleted) {
+        if (canModify && !m.is_deleted) {
             html += `<div class="absolute -top-3 ${isMe ? 'right-2' : 'left-2'} hidden group-hover:flex items-center gap-0.5 bg-white shadow-xs border border-slate-300 rounded-lg p-0.5 z-10">`;
             if (m.message_text) {
                 const escapedTextJson = JSON.stringify(m.message_text);
@@ -1042,24 +1372,25 @@
             html += `</div>`;
         }
 
-        html += `</div>`;
+        html += `</div></div>`;
         return html;
     }
 
     function appendMessageToDom(m) {
         const isMe = m.is_me;
         const div = document.createElement('div');
-        div.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} message-node group relative`;
+        div.className = `flex ${isMe ? 'flex-row-reverse' : 'flex-row'} items-center gap-2 w-full message-row group relative`;
         div.setAttribute('data-id', m.id);
-        div.innerHTML = buildMessageInnerHtml(m);
+        div.innerHTML = buildMessageRowInnerHtml(m);
         messagesContainer.appendChild(div);
     }
 
     function updateMessageInDom(m) {
-        const node = document.querySelector(`.message-node[data-id="${m.id}"]`);
-        if (!node) return;
-        node.className = `flex flex-col ${m.is_me ? 'items-end' : 'items-start'} message-node group relative`;
-        node.innerHTML = buildMessageInnerHtml(m);
+        const row = document.querySelector(`.message-row[data-id="${m.id}"]`);
+        if (!row) return;
+        const isMe = m.is_me;
+        row.className = `flex ${isMe ? 'flex-row-reverse' : 'flex-row'} items-center gap-2 w-full message-row group relative`;
+        row.innerHTML = buildMessageRowInnerHtml(m);
     }
 
     function escapeHtml(text) {
@@ -1076,7 +1407,7 @@
         if (isPolling) return;
         isPolling = true;
 
-        const url = `{{ route('chat.messages') }}?type=${activeType}&receiver_id=${receiverId}&after_id=${lastMessageId}&last_sync=${encodeURIComponent(lastSyncTime)}`;
+        const url = `{{ route('chat.messages') }}?type=${currentActiveType}&receiver_id=${currentReceiverId}&after_id=${lastMessageId}&last_sync=${encodeURIComponent(lastSyncTime)}`;
 
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.json())
@@ -1098,12 +1429,22 @@
                     if (placeholder) placeholder.remove();
 
                     data.messages.forEach(m => {
-                        if (!document.querySelector(`.message-node[data-id="${m.id}"]`)) {
+                        if (!document.querySelector(`.message-row[data-id="${m.id}"]`)) {
                             appendMessageToDom(m);
                             if (m.id > lastMessageId) lastMessageId = m.id;
                         }
                     });
                     scrollToBottom();
+
+                    // Update memory cache
+                    const cacheKey = `${currentActiveType}_${currentReceiverId || 'group'}`;
+                    if (conversationCache[cacheKey]) {
+                        data.messages.forEach(m => {
+                            if (!conversationCache[cacheKey].find(item => item.id === m.id)) {
+                                conversationCache[cacheKey].push(m);
+                            }
+                        });
+                    }
                 }
             })
             .catch(() => {

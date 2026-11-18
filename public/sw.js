@@ -1,8 +1,10 @@
-const CACHE_NAME = 'bk-packages-erp-v5';
+const CACHE_NAME = 'bk-packages-erp-v7';
 
 const STATIC_ASSET_URLS = [
   '/manifest.json',
   '/icons/icon.svg',
+  '/js/dexie.js',
+  '/js/html2canvas.min.js',
   '/js/fast-nav.js',
   '/js/offline-sync.js',
   '/js/ai-copilot.js'

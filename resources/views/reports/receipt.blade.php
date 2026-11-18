@@ -51,9 +51,15 @@
         <a href="{{ route('reports.index', ['date' => $date]) }}" class="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
             <span class="material-symbols-outlined text-[16px]">arrow_back</span> Back to Daily Report
         </a>
-        <div class="flex items-center gap-2">
-            <button onclick="copySlipSummary()" type="button" class="px-3 py-1.5 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 shadow-xs inline-flex items-center gap-1">
+        <div class="flex items-center flex-wrap gap-2">
+            <button onclick="copySlipSummary()" type="button" class="px-3 py-1.5 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 shadow-xs inline-flex items-center gap-1" title="Copy text summary for WhatsApp">
                 <span class="material-symbols-outlined text-[16px]">content_copy</span> Copy Slip Text
+            </button>
+            <button id="btn-download-img" onclick="downloadSlipImage()" type="button" class="px-3 py-1.5 rounded-lg bg-indigo-700 text-white text-xs font-semibold hover:bg-indigo-800 shadow-xs inline-flex items-center gap-1" title="Download slip as high-res PNG image">
+                <span class="material-symbols-outlined text-[16px]">image</span> Download Image (PNG)
+            </button>
+            <button id="btn-share-img" onclick="shareSlipImage()" type="button" class="px-3 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 shadow-xs inline-flex items-center gap-1" title="Share slip image directly to WhatsApp or apps">
+                <span class="material-symbols-outlined text-[16px]">share</span> Share Image
             </button>
             <button onclick="window.print()" type="button" class="px-4 py-1.5 rounded-lg bg-navy-900 bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 shadow-xs inline-flex items-center gap-1">
                 <span class="material-symbols-outlined text-[16px]">print</span> Print Slip (Thermal / A4)
@@ -283,7 +289,84 @@
 
     </div>
 
+    <script src="{{ asset('js/html2canvas.min.js') }}"></script>
     <script>
+    async function generateSlipCanvas() {
+        const card = document.querySelector('.print-card');
+        return await html2canvas(card, {
+            scale: 2, // 2x high resolution for crisp viewing on phones & print
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false
+        });
+    }
+
+    async function downloadSlipImage() {
+        const btn = document.getElementById('btn-download-img');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Rendering...';
+        btn.disabled = true;
+
+        try {
+            const canvas = await generateSlipCanvas();
+            const link = document.createElement('a');
+            link.download = 'BK_Roznamcha_Slip_{{ \Carbon\Carbon::parse($date)->format("Ymd") }}.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (e) {
+            console.error('Image capture error:', e);
+            alert('Could not generate image. Please use Print -> Save as PDF.');
+        } finally {
+            btn.innerHTML = origHtml;
+            btn.disabled = false;
+        }
+    }
+
+    async function shareSlipImage() {
+        const btn = document.getElementById('btn-share-img');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Preparing...';
+        btn.disabled = true;
+
+        try {
+            const canvas = await generateSlipCanvas();
+            canvas.toBlob(async (blob) => {
+                if (!blob) throw new Error('Blob creation failed');
+                const fileName = 'BK_Roznamcha_Slip_{{ \Carbon\Carbon::parse($date)->format("Ymd") }}.png';
+                const file = new File([blob], fileName, { type: 'image/png' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'BK Packages — Daily Roznamcha Slip',
+                            text: 'BK Packages Okara Factory Progress & Roznamcha Slip ({{ $date }})'
+                        });
+                    } catch (shareErr) {
+                        if (shareErr.name !== 'AbortError') {
+                            console.warn('Share error, falling back:', shareErr);
+                        }
+                    }
+                } else {
+                    // Desktop fallback: download the image and copy summary text for instant WhatsApp paste
+                    const link = document.createElement('a');
+                    link.download = fileName;
+                    link.href = URL.createObjectURL(blob);
+                    link.click();
+                    copySlipSummary();
+                    alert('Image downloaded & summary text copied to clipboard! You can now drag or paste it into WhatsApp or email.');
+                }
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
+            }, 'image/png');
+        } catch (e) {
+            console.error('Share error:', e);
+            btn.innerHTML = origHtml;
+            btn.disabled = false;
+            alert('Share preparation failed. You can use "Download Image (PNG)".');
+        }
+    }
+
     function copySlipSummary() {
         const text = `*BK PACKAGES OKARA — DAILY ROZNAMCHA SLIP*
 Ref: BK-ROZ-{{ \Carbon\Carbon::parse($date)->format('Ymd') }}

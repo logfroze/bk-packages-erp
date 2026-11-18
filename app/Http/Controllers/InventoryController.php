@@ -9,6 +9,7 @@ use App\Models\PrintedTopSheet;
 use App\Models\RawMaterial;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -18,24 +19,24 @@ class InventoryController extends Controller
     {
         $tab = $request->get('tab', 'cartons');
 
-        // Eager load with client party to eliminate N+1 latency
-        $cartons = CartonProduct::with('client')->orderBy('box_title')->get();
+        // Cached lookup data to eliminate roundtrip latency from Singapore DB
+        $cartons = Cache::remember('all_cartons_with_client', 60, fn() => CartonProduct::with('client')->orderBy('box_title')->get());
         $cartonsByParty = $cartons->groupBy(fn($c) => $c->client?->name ?? 'Unassigned Client');
 
-        $rawMaterials = RawMaterial::orderBy('name')->get();
-        $paperReels = PaperReel::with(['rawMaterial', 'supplier'])->latest()->get();
+        $rawMaterials = Cache::remember('all_raw_materials', 60, fn() => RawMaterial::orderBy('name')->get());
+        $paperReels = PaperReel::with(['rawMaterial', 'supplier'])->latest('id')->get();
         $totalReelsKg = $paperReels->sum('remaining_weight_kg');
         $reelsByDeckle = $paperReels->groupBy(fn($r) => (string) ($r->deckle_size_inches ?: '33.0'));
 
         $printedTopSheets = PrintedTopSheet::with(['cartonProduct', 'supplier'])->orderBy('item_name')->get();
         $totalTopSheetsPieces = $printedTopSheets->sum('stock_pieces');
 
-        $customers = Party::where('type', 'CUSTOMER')->orderBy('name')->get();
-        $suppliers = Party::where('type', 'SUPPLIER')->orWhere('classification', 'PAPER_MILL')->orderBy('name')->get();
+        $customers = Cache::remember('customers_sorted', 60, fn() => Party::where('type', 'CUSTOMER')->orderBy('name')->get());
+        $suppliers = Cache::remember('suppliers_sorted', 60, fn() => Party::where('type', 'SUPPLIER')->orWhere('classification', 'PAPER_MILL')->orderBy('name')->get());
 
         $deckleSizes = PaperReel::availableDeckleSizes();
         $paperGrades = PaperReel::availablePaperGrades();
-        $sourcingCities = ['Faisalabad', 'Multan', 'Lahore', 'Rahim Yar Khan', 'Jumber'];
+        $sourcingCities = ['Faisalabad', 'Multan', 'Lahore', 'Rahim Yar Khan', 'Jumber', 'Okara'];
 
         return view('inventory.index', compact(
             'tab',
@@ -87,6 +88,54 @@ class InventoryController extends Controller
             ->with('success', "Paper Reel {$validated['reel_number']} ({$validated['initial_weight_kg']} kg) added to stock in KG.");
     }
 
+    public function updateReel(Request $request, PaperReel $reel): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reel_number' => 'required|string|unique:paper_reels,reel_number,' . $reel->id,
+            'raw_material_id' => 'required|exists:raw_materials,id',
+            'supplier_id' => 'nullable|exists:parties,id',
+            'paper_grade' => 'nullable|string',
+            'deckle_size_inches' => 'nullable|numeric|min:15|max:50',
+            'initial_weight_kg' => 'required|numeric|min:1',
+            'remaining_weight_kg' => 'required|numeric|min:0',
+            'status' => 'required|string',
+        ]);
+
+        $diff = (float)$validated['remaining_weight_kg'] - (float)$reel->remaining_weight_kg;
+
+        DB::transaction(function () use ($reel, $validated, $diff) {
+            $reel->update([
+                'reel_number' => strtoupper(trim($validated['reel_number'])),
+                'raw_material_id' => $validated['raw_material_id'],
+                'supplier_id' => $validated['supplier_id'] ?? null,
+                'paper_grade' => $validated['paper_grade'] ?? $reel->paper_grade,
+                'deckle_size_inches' => $validated['deckle_size_inches'] ?? $reel->deckle_size_inches,
+                'initial_weight_kg' => $validated['initial_weight_kg'],
+                'remaining_weight_kg' => $validated['remaining_weight_kg'],
+                'status' => $validated['status'],
+            ]);
+
+            if ($diff != 0) {
+                RawMaterial::where('id', $validated['raw_material_id'])->increment('total_stock_qty', $diff);
+            }
+        });
+
+        return redirect()->route('inventory.index', ['tab' => 'reels'])
+            ->with('success', "Paper Reel [{$reel->reel_number}] updated successfully.");
+    }
+
+    public function destroyReel(PaperReel $reel): RedirectResponse
+    {
+        $reelNum = $reel->reel_number;
+        DB::transaction(function () use ($reel) {
+            RawMaterial::where('id', $reel->raw_material_id)->decrement('total_stock_qty', min($reel->remaining_weight_kg, RawMaterial::find($reel->raw_material_id)->total_stock_qty ?? 0));
+            $reel->delete();
+        });
+
+        return redirect()->route('inventory.index', ['tab' => 'reels'])
+            ->with('success', "Paper Reel [{$reelNum}] deleted.");
+    }
+
     public function storeCarton(Request $request): RedirectResponse
     {
         $validated = $request->validate([
@@ -110,8 +159,47 @@ class InventoryController extends Controller
             'stock_pieces' => $validated['stock_pieces'] ?? 0,
         ]);
 
+        Cache::forget('all_cartons_with_client');
+
         return redirect()->route('inventory.index', ['tab' => 'cartons'])
             ->with('success', "New carton specification '{$validated['box_title']}' created.");
+    }
+
+    public function updateCarton(Request $request, CartonProduct $carton): RedirectResponse
+    {
+        $validated = $request->validate([
+            'client_id' => 'required|exists:parties,id',
+            'box_title' => 'required|string|max:255',
+            'ply_type' => 'required|string',
+            'flute_type' => 'required|string',
+            'unit_selling_price' => 'required|numeric|min:0',
+            'stock_pieces' => 'required|integer|min:0',
+        ]);
+
+        $carton->update([
+            'client_id' => $validated['client_id'],
+            'box_title' => $validated['box_title'],
+            'ply_type' => $validated['ply_type'],
+            'flute_type' => $validated['flute_type'],
+            'unit_selling_price' => $validated['unit_selling_price'],
+            'stock_pieces' => $validated['stock_pieces'],
+        ]);
+
+        Cache::forget('all_cartons_with_client');
+
+        return redirect()->route('inventory.index', ['tab' => 'cartons'])
+            ->with('success', "Carton spec '{$carton->box_title}' updated successfully.");
+    }
+
+    public function destroyCarton(CartonProduct $carton): RedirectResponse
+    {
+        $title = $carton->box_title;
+        $carton->delete();
+
+        Cache::forget('all_cartons_with_client');
+
+        return redirect()->route('inventory.index', ['tab' => 'cartons'])
+            ->with('success', "Carton spec '{$title}' deleted.");
     }
 
     public function storeTopSheet(Request $request): RedirectResponse
@@ -120,15 +208,17 @@ class InventoryController extends Controller
             'item_name' => 'required|string|max:255',
             'carton_product_id' => 'nullable|exists:carton_products,id',
             'supplier_id' => 'nullable|exists:parties,id',
+            'supplier_name' => 'nullable|string|max:150',
             'sourcing_city' => 'required|string|max:100',
             'stock_pieces' => 'required|integer|min:0',
             'minimum_threshold' => 'nullable|integer|min:0',
             'unit_cost' => 'nullable|numeric|min:0',
             'location' => 'nullable|string|max:100',
+            'received_date' => 'nullable|date',
             'notes' => 'nullable|string|max:500',
         ]);
 
-        $count = PrintedTopSheet::count() + 1;
+        $count = PrintedTopSheet::max('id') + 1;
         $code = 'TS-' . str_pad((string) $count, 4, '0', STR_PAD_LEFT);
 
         PrintedTopSheet::create([
@@ -136,11 +226,13 @@ class InventoryController extends Controller
             'item_name' => trim($validated['item_name']),
             'carton_product_id' => $validated['carton_product_id'] ?? null,
             'supplier_id' => $validated['supplier_id'] ?? null,
+            'supplier_name' => !empty($validated['supplier_name']) ? trim($validated['supplier_name']) : null,
             'sourcing_city' => $validated['sourcing_city'],
             'stock_pieces' => (int) $validated['stock_pieces'],
             'minimum_threshold' => $validated['minimum_threshold'] ?? 500,
             'unit_cost' => $validated['unit_cost'] ?? 0.00,
             'location' => $validated['location'] ?? 'Top Sheet Bay 1',
+            'received_date' => $validated['received_date'] ?? now()->toDateString(),
             'notes' => $validated['notes'] ?? null,
         ]);
 

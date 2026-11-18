@@ -119,13 +119,16 @@
                         <div>
                             <div class="flex items-center justify-between gap-2 mb-2">
                                 <h3 class="font-bold text-slate-900 text-sm">{{ $card->title }}</h3>
-                                <div class="flex items-center gap-1.5">
+                                <div class="flex items-center gap-1">
                                     @if($card->badge_text)
                                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                                             {{ $card->badge_text }}
                                         </span>
                                     @endif
-                                    <form action="{{ route('custom_cards.destroy', $card->id) }}" method="POST" onsubmit="return confirm('Delete this custom card?');">
+                                    <button type="button" onclick="openEditCustomCardModal({{ json_encode($card) }})" class="text-slate-400 hover:text-blue-600 p-1 rounded transition-colors" title="Edit Card & Grid">
+                                        <span class="material-symbols-outlined text-[16px]">edit</span>
+                                    </button>
+                                    <form action="{{ route('custom_cards.destroy', $card->id) }}" method="POST" onsubmit="return confirm('Delete this custom card?');" class="inline">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="text-slate-400 hover:text-red-600 p-1 rounded transition-colors" title="Delete Card">
@@ -242,14 +245,20 @@
                                     <span class="text-slate-400">—</span>
                                 @endif
                             </td>
-                            <td class="px-4 py-3 text-center">
-                                <form action="{{ route('production.corrugations.destroy', $run->id) }}" method="POST" onsubmit="return confirm('Delete this corrugation run record?');">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete Run">
-                                        <span class="material-symbols-outlined text-[16px]">delete</span>
+                            <td class="px-4 py-3 text-center whitespace-nowrap">
+                                <div class="inline-flex items-center gap-1">
+                                    <button type="button" onclick="openEditCorrugationModal({{ json_encode($run) }})"
+                                        class="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors" title="Edit Run">
+                                        <span class="material-symbols-outlined text-[16px]">edit</span>
                                     </button>
-                                </form>
+                                    <form action="{{ route('production.corrugations.destroy', $run->id) }}" method="POST" onsubmit="return confirm('Delete this corrugation run record?');" class="inline">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete Run">
+                                            <span class="material-symbols-outlined text-[16px]">delete</span>
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -436,6 +445,89 @@
     </div>
 </div>
 
+<!-- MODAL: EDIT CORRUGATION RUN -->
+<div id="modal-edit-corrugation" class="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 my-8">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div>
+                <h3 class="font-bold text-slate-900 text-lg flex items-center gap-2">
+                    <span class="material-symbols-outlined text-blue-600">edit_note</span>
+                    Edit Corrugation Run (<span id="edit-corr-run-code-label"></span>)
+                </h3>
+                <p class="text-xs text-slate-500 mt-0.5">Update sheet count, Nalis, board type, operator, or notes</p>
+            </div>
+            <button onclick="closeModal('modal-edit-corrugation')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <form id="edit-corrugation-form" method="POST" class="mt-5 space-y-4">
+            @csrf
+            @method('PUT')
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Board Layer Type *</label>
+                    <select name="board_type" id="edit-corr-board-type" required class="w-full rounded-xl border-slate-300 text-xs py-2 font-semibold text-blue-900">
+                        <option value="DOUBLE_WALL">Double Wall (5-Ply) — Standard</option>
+                        <option value="SINGLE_WALL">Single Wall (3-Ply)</option>
+                        <option value="SINGLE_FACE">Single Face (2-Ply)</option>
+                        <option value="TRIPLE_WALL">Triple Wall (7-Ply)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Shift</label>
+                    <select name="shift" id="edit-corr-shift" required class="w-full rounded-xl border-slate-300 text-xs py-2 font-semibold">
+                        <option value="DAY">DAY Shift</option>
+                        <option value="NIGHT">NIGHT Shift</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Sheets Produced</label>
+                    <input type="number" name="completed_sheets_produced" id="edit-corr-sheets" min="0" class="w-full rounded-xl border-slate-300 text-xs py-2 font-bold" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Nalis Produced</label>
+                    <input type="number" name="nalis_produced" id="edit-corr-nalis" min="0" class="w-full rounded-xl border-slate-300 text-xs py-2 font-bold" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Deckle Size (Inches)</label>
+                    <input type="number" step="0.5" name="deckle_size_inches" id="edit-corr-deckle" min="15" max="50" class="w-full rounded-xl border-slate-300 text-xs py-2" />
+                </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Sheet Size (Optional)</label>
+                    <input type="text" name="sheet_size" id="edit-corr-sheet-size" placeholder="e.g. 36×24 Inch" class="w-full rounded-xl border-slate-300 text-xs py-2" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Total Paper Weight (KG)</label>
+                    <input type="number" step="0.01" name="total_paper_weight_kg" id="edit-corr-weight" min="0" class="w-full rounded-xl border-slate-300 text-xs py-2" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Waste Trim (KG)</label>
+                    <input type="number" step="0.01" name="waste_trim_kg" id="edit-corr-waste" min="0" class="w-full rounded-xl border-slate-300 text-xs py-2" />
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Operator Name</label>
+                <input type="text" name="operator_name" id="edit-corr-operator" class="w-full rounded-xl border-slate-300 text-xs py-2" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Notes</label>
+                <textarea name="notes" id="edit-corr-notes" rows="2" class="w-full rounded-xl border-slate-300 text-xs py-2 resize-none"></textarea>
+            </div>
+            <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button type="button" onclick="closeModal('modal-edit-corrugation')" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="submit" class="px-5 py-2 rounded-xl bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 shadow-sm flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[16px]">save</span>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- MODAL 2: CREATE CUSTOM CARD / TABLE (CLIENT CUSTOMIZATION REQUIREMENT) -->
 <div id="modal-custom-card" class="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
     <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 my-8">
@@ -524,6 +616,88 @@
                 <button type="submit" class="px-5 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 shadow-sm flex items-center gap-2">
                     <span class="material-symbols-outlined text-[16px]">add_box</span>
                     Save Custom Card
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: EDIT CUSTOM CARD / TABLE (FULL CLIENT CUSTOMIZATION) -->
+<div id="modal-edit-custom-card" class="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 my-8">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[20px]">edit</span>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-900 text-lg">Edit Custom Table / Card</h3>
+                    <p class="text-xs text-slate-500">Customize card title, badge, columns, rows, and cell data</p>
+                </div>
+            </div>
+            <button onclick="closeModal('modal-edit-custom-card')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <form id="edit-custom-card-form" action="" method="POST" class="mt-5 space-y-4">
+            @csrf
+            @method('PUT')
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Card / Table Title *</label>
+                    <input type="text" id="edit_card_title" name="title" required
+                        class="w-full rounded-xl border-slate-300 text-xs py-2" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Badge Tag</label>
+                    <input type="text" id="edit_card_badge_text" name="badge_text" placeholder="e.g. AUDIT"
+                        class="w-full rounded-xl border-slate-300 text-xs py-2 uppercase font-mono" />
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Subtitle / Note</label>
+                <input type="text" id="edit_card_subtitle" name="subtitle"
+                    class="w-full rounded-xl border-slate-300 text-xs py-2" />
+            </div>
+
+            <!-- Dynamic Table Editor -->
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-800 uppercase tracking-wider">Custom Table Columns & Rows</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="addEditGridColumn()" class="px-2.5 py-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-semibold flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[14px]">view_column</span>
+                            + Column
+                        </button>
+                        <button type="button" onclick="addEditGridRow()" class="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[14px]">add</span>
+                            + Row
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-64 border border-slate-200 rounded-lg p-2 bg-white">
+                    <table class="w-full text-xs text-left" id="edit-card-grid-table">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr id="edit-card-headers-row"></tr>
+                        </thead>
+                        <tbody id="edit-card-rows-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+                <input type="hidden" id="edit_card_rows_count" name="rows_count" value="1" />
+                <input type="hidden" id="edit_card_columns_count" name="columns_count" value="1" />
+            </div>
+
+            <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button type="button" onclick="closeModal('modal-edit-custom-card')" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 shadow-sm flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[16px]">check</span>
+                    Update Custom Card
                 </button>
             </div>
         </form>
@@ -631,6 +805,135 @@
         const type = document.getElementById('custom_card_type').value;
         const gridSection = document.getElementById('grid_builder_section');
         gridSection.style.display = type === 'DYNAMIC_GRID' ? 'block' : 'none';
+    }
+
+    function openEditCorrugationModal(run) {
+        document.getElementById('edit-corrugation-form').action = '/production/corrugations/' + run.id;
+        document.getElementById('edit-corr-run-code-label').innerText = run.run_code || '';
+        document.getElementById('edit-corr-board-type').value = run.board_type || 'DOUBLE_WALL';
+        document.getElementById('edit-corr-shift').value = run.shift || 'DAY';
+        document.getElementById('edit-corr-sheets').value = run.completed_sheets_produced || 0;
+        document.getElementById('edit-corr-nalis').value = run.nalis_produced || 0;
+        document.getElementById('edit-corr-deckle').value = run.deckle_size_inches || '';
+        document.getElementById('edit-corr-sheet-size').value = run.sheet_size || '';
+        document.getElementById('edit-corr-weight').value = run.total_paper_weight_kg || '';
+        document.getElementById('edit-corr-waste').value = run.waste_trim_kg || '';
+        document.getElementById('edit-corr-operator').value = run.operator_name || '';
+        document.getElementById('edit-corr-notes').value = run.notes || '';
+        openModal('modal-edit-corrugation');
+    }
+
+    let currentEditCardCols = 0;
+
+    function openEditCustomCardModal(card) {
+        document.getElementById('edit-custom-card-form').action = '/custom-cards/' + card.id;
+        document.getElementById('edit_card_title').value = card.title || '';
+        document.getElementById('edit_card_subtitle').value = card.subtitle || '';
+        document.getElementById('edit_card_badge_text').value = card.badge_text || '';
+        
+        const headers = Array.isArray(card.column_headers) && card.column_headers.length > 0 
+            ? card.column_headers 
+            : ['Col 1', 'Col 2', 'Col 3'];
+        const rows = Array.isArray(card.grid_data) && card.grid_data.length > 0
+            ? card.grid_data
+            : [['', '', '']];
+
+        renderEditGrid(headers, rows);
+        openModal('modal-edit-custom-card');
+    }
+
+    function renderEditGrid(headers, rows) {
+        currentEditCardCols = headers.length;
+
+        const trHead = document.getElementById('edit-card-headers-row');
+        trHead.innerHTML = '';
+        headers.forEach((h, cIdx) => {
+            const th = document.createElement('th');
+            th.className = 'p-1.5 font-semibold text-slate-700';
+            th.innerHTML = `<input type="text" name="column_headers[]" value="${(h || '').replace(/"/g, '&quot;')}" class="w-full rounded border-slate-300 text-xs py-1 px-1.5 font-semibold" placeholder="Header ${cIdx + 1}" />`;
+            trHead.appendChild(th);
+        });
+        const thAct = document.createElement('th');
+        thAct.className = 'p-1.5 w-10 text-center text-slate-400';
+        thAct.innerHTML = '';
+        trHead.appendChild(thAct);
+
+        const tbody = document.getElementById('edit-card-rows-tbody');
+        tbody.innerHTML = '';
+        rows.forEach((rData, rIdx) => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 edit-grid-row';
+            for (let c = 0; c < currentEditCardCols; c++) {
+                const td = document.createElement('td');
+                td.className = 'p-1';
+                const cellVal = (Array.isArray(rData) && rData[c] !== undefined) ? rData[c] : '';
+                td.innerHTML = `<input type="text" name="grid_data[${rIdx}][${c}]" value="${(cellVal || '').toString().replace(/"/g, '&quot;')}" class="w-full rounded border-slate-200 text-xs py-1 px-1.5" />`;
+                tr.appendChild(td);
+            }
+            const tdAct = document.createElement('td');
+            tdAct.className = 'p-1 text-center';
+            tdAct.innerHTML = `<button type="button" onclick="this.closest('tr').remove(); reindexEditGridRows();" class="text-slate-300 hover:text-red-600 p-1" title="Delete Row"><span class="material-symbols-outlined text-[16px]">delete</span></button>`;
+            tr.appendChild(tdAct);
+            tbody.appendChild(tr);
+        });
+
+        updateEditGridCounts();
+    }
+
+    function addEditGridRow() {
+        const tbody = document.getElementById('edit-card-rows-tbody');
+        const rIdx = tbody.querySelectorAll('tr').length;
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 edit-grid-row';
+        for (let c = 0; c < currentEditCardCols; c++) {
+            const td = document.createElement('td');
+            td.className = 'p-1';
+            td.innerHTML = `<input type="text" name="grid_data[${rIdx}][${c}]" value="" class="w-full rounded border-slate-200 text-xs py-1 px-1.5" />`;
+            tr.appendChild(td);
+        }
+        const tdAct = document.createElement('td');
+        tdAct.className = 'p-1 text-center';
+        tdAct.innerHTML = `<button type="button" onclick="this.closest('tr').remove(); reindexEditGridRows();" class="text-slate-300 hover:text-red-600 p-1" title="Delete Row"><span class="material-symbols-outlined text-[16px]">delete</span></button>`;
+        tr.appendChild(tdAct);
+        tbody.appendChild(tr);
+        updateEditGridCounts();
+    }
+
+    function addEditGridColumn() {
+        currentEditCardCols++;
+        const trHead = document.getElementById('edit-card-headers-row');
+        const thAct = trHead.lastElementChild;
+        const newTh = document.createElement('th');
+        newTh.className = 'p-1.5 font-semibold text-slate-700';
+        newTh.innerHTML = `<input type="text" name="column_headers[]" value="Col ${currentEditCardCols}" class="w-full rounded border-slate-300 text-xs py-1 px-1.5 font-semibold" />`;
+        trHead.insertBefore(newTh, thAct);
+
+        const rows = document.querySelectorAll('#edit-card-rows-tbody tr');
+        rows.forEach((tr, rIdx) => {
+            const tdAct = tr.lastElementChild;
+            const newTd = document.createElement('td');
+            newTd.className = 'p-1';
+            newTd.innerHTML = `<input type="text" name="grid_data[${rIdx}][${currentEditCardCols - 1}]" value="" class="w-full rounded border-slate-200 text-xs py-1 px-1.5" />`;
+            tr.insertBefore(newTd, tdAct);
+        });
+        updateEditGridCounts();
+    }
+
+    function reindexEditGridRows() {
+        const rows = document.querySelectorAll('#edit-card-rows-tbody tr');
+        rows.forEach((tr, rIdx) => {
+            const inputs = tr.querySelectorAll('td:not(:last-child) input');
+            inputs.forEach((inp, cIdx) => {
+                inp.name = `grid_data[${rIdx}][${cIdx}]`;
+            });
+        });
+        updateEditGridCounts();
+    }
+
+    function updateEditGridCounts() {
+        const rows = document.querySelectorAll('#edit-card-rows-tbody tr').length;
+        document.getElementById('edit_card_rows_count').value = rows;
+        document.getElementById('edit_card_columns_count').value = currentEditCardCols;
     }
 
     document.addEventListener('DOMContentLoaded', () => {

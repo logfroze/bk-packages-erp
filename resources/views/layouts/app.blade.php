@@ -626,7 +626,7 @@
         </div>
     </aside>
 
-    <script src="https://unpkg.com/dexie@4/dist/dexie.js"></script>
+    <script src="/js/dexie.js"></script>
     <script src="/js/offline-sync.js"></script>
     <script src="/js/fast-nav.js"></script>
     <script src="/js/ai-copilot.js"></script>
@@ -648,9 +648,10 @@
             document.body.classList.remove('overflow-hidden');
         }
 
-        // Global In-App Chat Unread Polling
+        // Global In-App Chat Unread Polling (Gentle 30s interval with visibility check)
         (function initChatUnreadNotifier() {
             function updateChatBadges() {
+                if (document.hidden) return;
                 fetch('{{ route('chat.unread_total') }}')
                     .then(r => r.ok ? r.json() : null)
                     .then(data => {
@@ -677,7 +678,7 @@
                     .catch(() => {});
             }
             updateChatBadges();
-            setInterval(updateChatBadges, 8000);
+            setInterval(updateChatBadges, 30000);
         })();
 
         // PWA Offline Service Worker Registration

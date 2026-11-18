@@ -24,12 +24,16 @@
     </style>
 </head>
 <body>
-    <div class="no-print" style="margin-bottom: 15px; text-align: right;">
+    <div class="no-print" style="margin-bottom: 15px; text-align: right; display: flex; justify-content: flex-end; gap: 8px;">
+        <button id="btn-petty-img" onclick="downloadPettyImage()" style="padding: 8px 16px; background: #4338ca; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+            Download Image (PNG)
+        </button>
         <button onclick="window.print()" style="padding: 8px 16px; background: #0f172a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
             Print / Save as PDF
         </button>
     </div>
 
+    <div id="petty-cash-card" style="background: white; padding: 10px;">
     <div class="header">
         <div>
             <div class="factory-title">BK PACKAGES FACTORY</div>
@@ -120,5 +124,35 @@
             <div style="font-size: 9px; color: #94a3b8; font-weight: normal; margin-top: 2px;">Approved By</div>
         </div>
     </div>
+    </div>
+
+    <script src="{{ asset('js/html2canvas.min.js') }}"></script>
+    <script>
+    async function downloadPettyImage() {
+        const btn = document.getElementById('btn-petty-img');
+        const origText = btn.innerHTML;
+        btn.innerHTML = 'Rendering...';
+        btn.disabled = true;
+
+        try {
+            const card = document.getElementById('petty-cash-card');
+            const canvas = await html2canvas(card, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+            const link = document.createElement('a');
+            link.download = 'BK_PettyCash_{{ $date }}.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (e) {
+            console.error('Image capture error:', e);
+            alert('Could not render image. Please use Print / Save as PDF.');
+        } finally {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+        }
+    }
+    </script>
 </body>
 </html>

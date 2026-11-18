@@ -110,6 +110,9 @@
                                     @endif
                                 </div>
                                 <div class="flex items-center gap-1">
+                                    <button type="button" onclick="openEditProductionCardModal({{ json_encode($card) }})" class="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit card">
+                                        <span class="material-symbols-outlined text-[16px]">edit</span>
+                                    </button>
                                     <form action="{{ route('custom_cards.destroy', $card->id) }}" method="POST" onsubmit="return confirm('Delete this custom card?');">
                                         @csrf
                                         @method('DELETE')
@@ -121,7 +124,7 @@
                             </div>
 
                             <div class="pt-3">
-                                @if($card->card_type === 'GRID_TABLE' && is_array($card->grid_data))
+                                @if(in_array($card->card_type, ['GRID_TABLE', 'DYNAMIC_GRID']) && is_array($card->grid_data))
                                     <div class="overflow-x-auto">
                                         <table class="w-full text-left text-xs">
                                             @if(is_array($card->column_headers) && count($card->column_headers) > 0)
@@ -206,7 +209,19 @@
             <div class="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between gap-5 shadow-xs hover:border-slate-300 transition-colors">
                 <div>
                     <div class="flex items-center justify-between mb-3">
-                        <span class="text-xs font-bold text-blue-600 font-mono">{{ $batch->batch_number }}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-blue-600 font-mono">{{ $batch->batch_number }}</span>
+                            <button type="button" onclick="openEditBatchModal({{ json_encode($batch) }})" class="p-1 text-slate-400 hover:text-blue-600 rounded hover:bg-slate-100 transition-colors" title="Edit Batch">
+                                <span class="material-symbols-outlined text-[15px]">edit</span>
+                            </button>
+                            <form action="{{ route('production.destroy', $batch->id) }}" method="POST" onsubmit="return confirm('Delete production batch {{ $batch->batch_number }}?');" class="inline">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors" title="Delete Batch">
+                                    <span class="material-symbols-outlined text-[15px]">delete</span>
+                                </button>
+                            </form>
+                        </div>
                         <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold border {{ $badgeClass }}">
                             {{ $batch->status }}
                         </span>
@@ -415,6 +430,86 @@
         </div>
     </div>
 
+    <!-- Modal: Edit Production Batch (Full Customization & Adjustment) -->
+    <div id="modal-edit-batch" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Edit Production Batch</h3>
+                    <p id="edit-batch-number-title" class="text-xs text-blue-600 font-mono font-bold mt-0.5"></p>
+                </div>
+                <button onclick="closeModal('modal-edit-batch')" class="text-slate-400 hover:text-slate-600">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <form id="form-edit-batch" method="POST" class="mt-4 space-y-4">
+                @csrf
+                @method('PUT')
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Target Box Design *</label>
+                    <select id="edit-batch-product" name="carton_product_id" required class="w-full rounded-lg border-slate-300 text-xs py-2">
+                        @foreach($cartonProducts as $cp)
+                            <option value="{{ $cp->id }}">{{ $cp->box_title }} ({{ $cp->client->name ?? 'General' }})</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Shift *</label>
+                        <select id="edit-batch-shift" name="shift" required class="w-full rounded-lg border-slate-300 text-xs py-2">
+                            <option value="DAY_SHIFT">Day Shift (08:00 AM - 08:00 PM)</option>
+                            <option value="NIGHT_SHIFT">Night Shift (08:00 PM - 08:00 AM)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Machine Line *</label>
+                        <select id="edit-batch-machine" name="current_machine" required class="w-full rounded-lg border-slate-300 text-xs py-2">
+                            <option value="SINGLE_FACER_CORRUGATOR">Single Facer Corrugator (Nali)</option>
+                            <option value="THINNING_SLITTER">Slider / Thinning Blade</option>
+                            <option value="FLEXO_PRINTER">Flexo Printing & Slotter</option>
+                            <option value="WIRE_STITCHING_BINDING">Wire Stitching & Binding</option>
+                            <option value="MANUAL_PASTING">Manual Sheet Pasting</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Target Quantity (Pcs) *</label>
+                        <input type="number" id="edit-batch-target" name="target_quantity" min="1" required class="w-full rounded-lg border-slate-300 text-xs py-2 font-mono font-bold" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Produced So Far (Pcs) *</label>
+                        <input type="number" id="edit-batch-produced" name="produced_quantity" min="0" required class="w-full rounded-lg border-slate-300 text-xs py-2 font-mono font-bold" />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Status *</label>
+                        <select id="edit-batch-status" name="status" required class="w-full rounded-lg border-slate-300 text-xs py-2 font-semibold">
+                            <option value="RUNNING">RUNNING (IN PROCESS)</option>
+                            <option value="COMPLETED">COMPLETED (FINISHED)</option>
+                            <option value="PAUSED">PAUSED (MAINTENANCE)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Target Due Date</label>
+                        <input type="date" id="edit-batch-due" name="due_date" class="w-full rounded-lg border-slate-300 text-xs py-2" />
+                    </div>
+                </div>
+
+                <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-edit-batch')" class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700">Cancel</button>
+                    <button type="submit" class="btn-solid-primary px-5 py-2 rounded-lg text-xs font-semibold shadow-xs">Update Batch</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal 2: + Custom Card / Table Builder (Full Dynamic Client Customization) -->
     <div id="modal-custom-card" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl border border-slate-200 max-w-2xl w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -496,6 +591,92 @@
                 <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
                     <button type="button" onclick="closeModal('modal-custom-card')" class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
                     <button type="submit" onclick="prepareCustomCardSubmit()" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 shadow-xs">Save Custom Card</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Custom ERP Card (Production) -->
+    <div id="modal-edit-custom-card-prod" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 max-w-3xl w-full p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-[20px]">edit</span>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900">Edit Custom ERP Card / Table</h3>
+                        <p class="text-xs text-slate-500">Edit titles, custom columns, rows, or key-value fields</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal-edit-custom-card-prod')" class="text-slate-400 hover:text-slate-600">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <form id="edit-prod-card-form" action="" method="POST" class="mt-4 space-y-4">
+                @csrf
+                @method('PUT')
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Card Title <span class="text-red-500">*</span></label>
+                        <input type="text" id="edit_prod_card_title" name="title" required class="w-full rounded-lg border-slate-300 text-xs py-2 font-medium" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Subtitle / Note</label>
+                        <input type="text" id="edit_prod_card_subtitle" name="subtitle" class="w-full rounded-lg border-slate-300 text-xs py-2" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Badge Tag</label>
+                    <input type="text" id="edit_prod_card_badge" name="badge_text" class="w-full rounded-lg border-slate-300 text-xs py-2 uppercase font-mono" />
+                </div>
+
+                <!-- Grid Table Editor Section -->
+                <div id="edit-prod-grid-ui" class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-800">Table Columns & Rows</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="addEditProdGridCol()" class="px-2.5 py-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-semibold flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[14px]">view_column</span>
+                                + Column
+                            </button>
+                            <button type="button" onclick="addEditProdGridRow()" class="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[14px]">add</span>
+                                + Row
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto max-h-60 border border-slate-200 rounded-lg p-2 bg-white">
+                        <table class="w-full text-xs text-left" id="edit-prod-card-table">
+                            <thead class="bg-slate-50 border-b border-slate-200">
+                                <tr id="edit-prod-headers-row"></tr>
+                            </thead>
+                            <tbody id="edit-prod-rows-tbody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <input type="hidden" id="edit_prod_rows_count" name="rows_count" value="1" />
+                    <input type="hidden" id="edit_prod_columns_count" name="columns_count" value="1" />
+                </div>
+
+                <!-- Field Pairs Editor Section -->
+                <div id="edit-prod-pairs-ui" class="hidden p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-800">Key-Value Pairs</span>
+                        <button type="button" onclick="addEditProdFieldPair()" class="px-2.5 py-1 rounded bg-white border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[14px]">add</span>
+                            + Add Field
+                        </button>
+                    </div>
+                    <div id="edit-prod-pairs-mount" class="space-y-2"></div>
+                </div>
+
+                <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-edit-custom-card-prod')" class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 shadow-xs">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -652,9 +833,176 @@
         }
     }
 
+    function openEditBatchModal(b) {
+        document.getElementById('form-edit-batch').action = '/production/' + b.id;
+        document.getElementById('edit-batch-number-title').textContent = b.batch_number;
+        document.getElementById('edit-batch-product').value = b.carton_product_id;
+        document.getElementById('edit-batch-shift').value = b.shift;
+        document.getElementById('edit-batch-machine').value = b.current_machine;
+        document.getElementById('edit-batch-target').value = b.target_quantity;
+        document.getElementById('edit-batch-produced').value = b.produced_quantity || 0;
+        document.getElementById('edit-batch-status').value = b.status || 'RUNNING';
+        let dDate = b.due_date ? b.due_date.substring(0, 10) : '';
+        document.getElementById('edit-batch-due').value = dDate;
+        openModal('modal-edit-batch');
+    }
+
     // Initialize Card matrix on load
     document.addEventListener('DOMContentLoaded', () => {
         buildCardMatrix();
     });
+
+    let currentEditProdCols = 0;
+
+    function openEditProductionCardModal(card) {
+        document.getElementById('edit-prod-card-form').action = '/custom-cards/' + card.id;
+        document.getElementById('edit_prod_card_title').value = card.title || '';
+        document.getElementById('edit_prod_card_subtitle').value = card.subtitle || '';
+        document.getElementById('edit_prod_card_badge').value = card.badge_text || '';
+
+        const gridUi = document.getElementById('edit-prod-grid-ui');
+        const pairsUi = document.getElementById('edit-prod-pairs-ui');
+
+        if (card.card_type === 'FIELD_PAIRS' || card.card_type === 'KEY_VALUE' || (card.field_pairs && Object.keys(card.field_pairs).length > 0)) {
+            gridUi.classList.add('hidden');
+            pairsUi.classList.remove('hidden');
+            renderEditProdPairs(card.field_pairs || {});
+        } else {
+            pairsUi.classList.add('hidden');
+            gridUi.classList.remove('hidden');
+            const headers = Array.isArray(card.column_headers) && card.column_headers.length > 0
+                ? card.column_headers
+                : ['Col 1', 'Col 2', 'Col 3'];
+            const rows = Array.isArray(card.grid_data) && card.grid_data.length > 0
+                ? card.grid_data
+                : [['', '', '']];
+            renderEditProdGrid(headers, rows);
+        }
+
+        openModal('modal-edit-custom-card-prod');
+    }
+
+    function renderEditProdGrid(headers, rows) {
+        currentEditProdCols = headers.length;
+
+        const trHead = document.getElementById('edit-prod-headers-row');
+        trHead.innerHTML = '';
+        headers.forEach((h, cIdx) => {
+            const th = document.createElement('th');
+            th.className = 'p-1.5 font-semibold text-slate-700';
+            th.innerHTML = `<input type="text" name="column_headers[]" value="${(h || '').replace(/"/g, '&quot;')}" class="w-full rounded border-slate-300 text-xs py-1 px-1.5 font-semibold" placeholder="Header ${cIdx + 1}" />`;
+            trHead.appendChild(th);
+        });
+        const thAct = document.createElement('th');
+        thAct.className = 'p-1.5 w-10 text-center text-slate-400';
+        thAct.innerHTML = '';
+        trHead.appendChild(thAct);
+
+        const tbody = document.getElementById('edit-prod-rows-tbody');
+        tbody.innerHTML = '';
+        rows.forEach((rData, rIdx) => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 edit-prod-row';
+            for (let c = 0; c < currentEditProdCols; c++) {
+                const td = document.createElement('td');
+                td.className = 'p-1';
+                const cellVal = (Array.isArray(rData) && rData[c] !== undefined) ? rData[c] : '';
+                td.innerHTML = `<input type="text" name="grid_data[${rIdx}][${c}]" value="${(cellVal || '').toString().replace(/"/g, '&quot;')}" class="w-full rounded border-slate-200 text-xs py-1 px-1.5" />`;
+                tr.appendChild(td);
+            }
+            const tdAct = document.createElement('td');
+            tdAct.className = 'p-1 text-center';
+            tdAct.innerHTML = `<button type="button" onclick="this.closest('tr').remove(); reindexEditProdRows();" class="text-slate-300 hover:text-red-600 p-1" title="Delete Row"><span class="material-symbols-outlined text-[16px]">delete</span></button>`;
+            tr.appendChild(tdAct);
+            tbody.appendChild(tr);
+        });
+
+        updateEditProdCounts();
+    }
+
+    function addEditProdGridRow() {
+        const tbody = document.getElementById('edit-prod-rows-tbody');
+        const rIdx = tbody.querySelectorAll('tr').length;
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 edit-prod-row';
+        for (let c = 0; c < currentEditProdCols; c++) {
+            const td = document.createElement('td');
+            td.className = 'p-1';
+            td.innerHTML = `<input type="text" name="grid_data[${rIdx}][${c}]" value="" class="w-full rounded border-slate-200 text-xs py-1 px-1.5" />`;
+            tr.appendChild(td);
+        }
+        const tdAct = document.createElement('td');
+        tdAct.className = 'p-1 text-center';
+        tdAct.innerHTML = `<button type="button" onclick="this.closest('tr').remove(); reindexEditProdRows();" class="text-slate-300 hover:text-red-600 p-1" title="Delete Row"><span class="material-symbols-outlined text-[16px]">delete</span></button>`;
+        tr.appendChild(tdAct);
+        tbody.appendChild(tr);
+        updateEditProdCounts();
+    }
+
+    function addEditProdGridCol() {
+        currentEditProdCols++;
+        const trHead = document.getElementById('edit-prod-headers-row');
+        const thAct = trHead.lastElementChild;
+        const newTh = document.createElement('th');
+        newTh.className = 'p-1.5 font-semibold text-slate-700';
+        newTh.innerHTML = `<input type="text" name="column_headers[]" value="Col ${currentEditProdCols}" class="w-full rounded border-slate-300 text-xs py-1 px-1.5 font-semibold" />`;
+        trHead.insertBefore(newTh, thAct);
+
+        const rows = document.querySelectorAll('#edit-prod-rows-tbody tr');
+        rows.forEach((tr, rIdx) => {
+            const tdAct = tr.lastElementChild;
+            const newTd = document.createElement('td');
+            newTd.className = 'p-1';
+            newTd.innerHTML = `<input type="text" name="grid_data[${rIdx}][${currentEditProdCols - 1}]" value="" class="w-full rounded border-slate-200 text-xs py-1 px-1.5" />`;
+            tr.insertBefore(newTd, tdAct);
+        });
+        updateEditProdCounts();
+    }
+
+    function reindexEditProdRows() {
+        const rows = document.querySelectorAll('#edit-prod-rows-tbody tr');
+        rows.forEach((tr, rIdx) => {
+            const inputs = tr.querySelectorAll('td:not(:last-child) input');
+            inputs.forEach((inp, cIdx) => {
+                inp.name = `grid_data[${rIdx}][${cIdx}]`;
+            });
+        });
+        updateEditProdCounts();
+    }
+
+    function updateEditProdCounts() {
+        const rows = document.querySelectorAll('#edit-prod-rows-tbody tr').length;
+        document.getElementById('edit_prod_rows_count').value = rows;
+        document.getElementById('edit_prod_columns_count').value = currentEditProdCols;
+    }
+
+    function renderEditProdPairs(pairs) {
+        const mount = document.getElementById('edit-prod-pairs-mount');
+        mount.innerHTML = '';
+        const entries = Object.entries(pairs);
+        if (entries.length === 0) {
+            addEditProdFieldPair();
+            return;
+        }
+        entries.forEach(([label, val]) => {
+            addEditProdFieldPair(label, val);
+        });
+    }
+
+    function addEditProdFieldPair(label = '', val = '') {
+        const mount = document.getElementById('edit-prod-pairs-mount');
+        const rowId = 'edit-field-pair-' + Date.now() + Math.random().toString(36).substr(2, 4);
+        const div = document.createElement('div');
+        div.id = rowId;
+        div.className = 'flex items-center gap-2';
+        div.innerHTML = `
+            <input type="text" name="field_labels[]" value="${label.replace(/"/g, '&quot;')}" placeholder="Parameter (e.g. Blade Angle / Speed)" class="flex-1 rounded border-slate-300 text-xs py-1.5 px-2.5 font-medium" />
+            <input type="text" name="field_values[]" value="${val.replace(/"/g, '&quot;')}" placeholder="Value (e.g. 45 Deg / 120 m/min)" class="flex-1 rounded border-slate-300 text-xs py-1.5 px-2.5 font-mono" />
+            <button type="button" onclick="document.getElementById('${rowId}').remove()" class="p-1.5 text-slate-400 hover:text-red-600 rounded">
+                <span class="material-symbols-outlined text-[16px]">close</span>
+            </button>
+        `;
+        mount.appendChild(div);
+    }
 </script>
 @endpush

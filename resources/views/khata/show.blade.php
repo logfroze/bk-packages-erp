@@ -78,6 +78,7 @@
                         <th class="py-3.5 px-5 text-right">Debit (Dr)</th>
                         <th class="py-3.5 px-5 text-right">Credit (Cr)</th>
                         <th class="py-3.5 px-5 text-right">Balance</th>
+                        <th class="py-3.5 px-5 text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 text-sm">
@@ -116,10 +117,29 @@
                             <td class="py-4 px-5 text-right num-tabular font-bold text-slate-900 whitespace-nowrap">
                                 Rs. {{ number_format(abs($entry->running_balance)) }} {{ $entry->running_balance >= 0 ? 'Dr' : 'Cr' }}
                             </td>
+                            <td class="py-4 px-5 text-center whitespace-nowrap">
+                                @if($entry->voucher && !auth()->user()?->isReadOnly())
+                                    <div class="inline-flex items-center gap-1">
+                                        <button type="button" onclick="openEditVoucherModal({{ json_encode($entry->voucher) }})"
+                                            class="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:text-blue-600 hover:bg-slate-50 transition-colors shadow-xs" title="Edit Voucher">
+                                            <span class="material-symbols-outlined text-[15px]">edit</span>
+                                        </button>
+                                        <form action="{{ route('khata.voucher.destroy', $entry->voucher->id) }}" method="POST" onsubmit="return confirm('Delete voucher {{ $entry->voucher->voucher_number }} (Rs. {{ number_format($entry->voucher->total_amount) }})? This will safely reverse the party balance.');" class="inline">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:text-red-600 hover:bg-slate-50 transition-colors shadow-xs" title="Delete Voucher">
+                                                <span class="material-symbols-outlined text-[15px]">delete</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                @else
+                                    <span class="text-xs text-slate-400">—</span>
+                                @endif
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="py-12 text-center text-slate-500">No ledger transactions recorded for this party yet.</td>
+                            <td colspan="7" class="py-12 text-center text-slate-500">No ledger transactions recorded for this party yet.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -176,20 +196,19 @@
                     <input type="text" name="description" required placeholder="Enter transaction note..." class="w-full rounded-lg border-slate-300 text-sm" />
                 </div>
 
-                <!-- Option C: In-Form Media Photo Capture -->
+                <!-- Option C: In-Form Media Photo Capture (Fail-safe single file input) -->
                 <div>
                     <label class="block text-xs font-semibold text-slate-700 mb-1">Cheque / Bank Slip / Bill Photo (Optional)</label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-dashed border-blue-200 bg-blue-50/40 hover:bg-blue-50 rounded-xl cursor-pointer text-xs font-semibold text-blue-700 transition-colors">
                             <span class="material-symbols-outlined text-base">photo_camera</span>
                             <span>Camera Snap</span>
-                            <input type="file" name="receipt_photo" accept="image/*" capture="environment" class="hidden" onchange="previewShowPhoto(this)" />
+                            <input type="file" id="party_voucher_file" name="receipt_photo" accept="image/*" capture="environment" class="hidden" onchange="previewShowPhoto(this)" />
                         </label>
-                        <label class="flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer text-xs font-medium text-slate-700 transition-colors">
+                        <button type="button" onclick="const fi = document.getElementById('party_voucher_file'); fi.removeAttribute('capture'); fi.click();" class="flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-medium text-slate-700 transition-colors">
                             <span class="material-symbols-outlined text-base">upload_file</span>
                             <span>Upload File</span>
-                            <input type="file" name="receipt_photo" accept="image/*,.pdf" class="hidden" onchange="previewShowPhoto(this)" />
-                        </label>
+                        </button>
                     </div>
                     <div id="show-preview-box" class="hidden mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 items-center justify-between">
                         <div class="flex items-center gap-1.5 truncate">
@@ -203,6 +222,96 @@
                 <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
                     <button type="button" onclick="closeModal('modal-party-voucher')" class="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-700">Cancel</button>
                     <button type="submit" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-sm font-medium">Post to Khata</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Voucher / Transaction -->
+    <div id="modal-edit-voucher" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-6 shadow-2xl my-8">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-blue-600">edit_note</span>
+                        <span>Edit Voucher (<span id="edit-voucher-num-label"></span>)</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Correct amount, type, description, or attach new slip</p>
+                </div>
+                <button onclick="closeModal('modal-edit-voucher')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <form id="edit-voucher-form" method="POST" enctype="multipart/form-data" class="mt-4 space-y-4">
+                @csrf
+                @method('PUT')
+                <input type="hidden" name="party_id" value="{{ $party->id }}" />
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Transaction Type</label>
+                    <select name="voucher_type" id="edit-voucher-type" class="w-full rounded-lg border-slate-300 text-sm font-semibold">
+                        <option value="RECEIPT_VOUCHER">Payment Received (Cash / Cheque)</option>
+                        <option value="SALES_INVOICE">Manual Sales Bill / Invoice (Debit)</option>
+                        <option value="PAYMENT_VOUCHER">Payment Made to Supplier (Debit)</option>
+                        <option value="PURCHASE_BILL">Paper / Material Purchase Bill (Credit)</option>
+                        <option value="EXPENSE_VOUCHER">General Expense</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Amount (Rs.)</label>
+                        <input type="number" name="total_amount" id="edit-voucher-amount" min="1" step="0.01" required class="w-full rounded-lg border-slate-300 text-sm font-bold" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Payment Mode</label>
+                        <select name="payment_mode" id="edit-voucher-mode" class="w-full rounded-lg border-slate-300 text-sm">
+                            <option value="CASH">Cash</option>
+                            <option value="CHEQUE">Cheque</option>
+                            <option value="ONLINE_BANK">Online Bank</option>
+                            <option value="CREDIT">Credit Bill</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Voucher Date</label>
+                        <input type="date" name="voucher_date" id="edit-voucher-date" class="w-full rounded-lg border-slate-300 text-sm" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Reference / Cheque #</label>
+                        <input type="text" name="reference_number" id="edit-voucher-ref" class="w-full rounded-lg border-slate-300 text-sm" />
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Narration / Description</label>
+                    <input type="text" name="description" id="edit-voucher-desc" required class="w-full rounded-lg border-slate-300 text-sm" />
+                </div>
+
+                <!-- Replace / Attach Photo -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Replace / Attach Slip Photo (Optional)</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-dashed border-blue-200 bg-blue-50/40 hover:bg-blue-50 rounded-xl cursor-pointer text-xs font-semibold text-blue-700 transition-colors">
+                            <span class="material-symbols-outlined text-base">photo_camera</span>
+                            <span>Camera Snap</span>
+                            <input type="file" id="edit_voucher_file" name="receipt_photo" accept="image/*" capture="environment" class="hidden" onchange="previewEditVoucherPhoto(this)" />
+                        </label>
+                        <button type="button" onclick="const fi = document.getElementById('edit_voucher_file'); fi.removeAttribute('capture'); fi.click();" class="flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-medium text-slate-700 transition-colors">
+                            <span class="material-symbols-outlined text-base">upload_file</span>
+                            <span>Upload File</span>
+                        </button>
+                    </div>
+                    <div id="edit-voucher-preview-box" class="hidden mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 items-center justify-between">
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+                            <span id="edit-voucher-preview-filename" class="font-medium truncate"></span>
+                        </div>
+                        <button type="button" onclick="clearEditVoucherPhoto()" class="text-red-500 hover:text-red-700 text-sm font-bold ml-2">&times;</button>
+                    </div>
+                </div>
+
+                <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-edit-voucher')" class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800 shadow-xs">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -234,6 +343,41 @@ function clearShowPhoto() {
             const inputs = form.querySelectorAll('input[type="file"]');
             inputs.forEach(i => i.value = '');
         }
+    }
+}
+
+function openEditVoucherModal(v) {
+    document.getElementById('edit-voucher-form').action = '/khata/voucher/' + v.id;
+    document.getElementById('edit-voucher-num-label').innerText = v.voucher_number || '';
+    document.getElementById('edit-voucher-type').value = v.voucher_type || 'RECEIPT_VOUCHER';
+    document.getElementById('edit-voucher-amount').value = v.total_amount || '';
+    document.getElementById('edit-voucher-mode').value = v.payment_mode || 'CASH';
+    document.getElementById('edit-voucher-date').value = v.voucher_date ? v.voucher_date.substring(0, 10) : '';
+    document.getElementById('edit-voucher-ref').value = v.reference_number || '';
+    document.getElementById('edit-voucher-desc').value = v.description || '';
+    openModal('modal-edit-voucher');
+}
+
+function previewEditVoucherPhoto(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const box = document.getElementById('edit-voucher-preview-box');
+        const filename = document.getElementById('edit-voucher-preview-filename');
+        if (box && filename) {
+            filename.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+            box.classList.remove('hidden');
+            box.classList.add('flex');
+        }
+    }
+}
+
+function clearEditVoucherPhoto() {
+    const box = document.getElementById('edit-voucher-preview-box');
+    if (box) {
+        box.classList.add('hidden');
+        box.classList.remove('flex');
+        const fi = document.getElementById('edit_voucher_file');
+        if (fi) fi.value = '';
     }
 }
 </script>

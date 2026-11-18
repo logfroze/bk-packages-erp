@@ -367,6 +367,9 @@
                                     <button onclick="addCustomGridRow({{ $card->id }})" class="px-2 py-1 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100">
                                         + Row
                                     </button>
+                                    <button type="button" onclick="openEditKhataCardModal({{ json_encode($card) }})" class="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-slate-50 transition-colors" title="Edit Table Details">
+                                        <span class="material-symbols-outlined text-[15px]">edit</span>
+                                    </button>
                                     <form action="{{ route('custom_cards.destroy', $card->id) }}" method="POST" onsubmit="return confirm('Delete this custom table?');" class="inline">
                                         @csrf
                                         @method('DELETE')
@@ -784,6 +787,54 @@
             <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button type="button" onclick="closeModal('modal-custom-local-card')" class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700">Cancel</button>
                 <button type="submit" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800">Create Table</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: EDIT CUSTOM LOCAL PARTY TABLE -->
+<div id="modal-edit-custom-local-card" class="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[18px]">edit</span>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-900 text-base">Edit Custom Table Info</h3>
+                    <p class="text-xs text-slate-400">Update table title, purpose, or badge</p>
+                </div>
+            </div>
+            <button onclick="closeModal('modal-edit-custom-local-card')" class="text-slate-400 hover:text-slate-600">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <form id="edit-custom-local-form" action="" method="POST" class="mt-4 space-y-4">
+            @csrf
+            @method('PUT')
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Table Heading / Title *</label>
+                <input type="text" id="edit_local_card_title" name="title" required
+                       class="w-full rounded-lg border-slate-300 text-xs py-2 focus:border-blue-600 focus:ring-blue-600 font-medium" />
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Subtitle / Purpose</label>
+                <input type="text" id="edit_local_card_subtitle" name="subtitle"
+                       class="w-full rounded-lg border-slate-300 text-xs py-2" />
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Badge Tag</label>
+                <input type="text" id="edit_local_card_badge" name="badge_text" placeholder="e.g. SHOP EXPENSES"
+                       class="w-full rounded-lg border-slate-300 text-xs py-2 uppercase font-mono" />
+            </div>
+
+            <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button type="button" onclick="closeModal('modal-edit-custom-local-card')" class="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700">Cancel</button>
+                <button type="submit" class="px-5 py-2 rounded-lg bg-navy-900 text-white text-xs font-semibold hover:bg-navy-800">Save Changes</button>
             </div>
         </form>
     </div>
@@ -1239,6 +1290,14 @@ function clearVoucherPhoto() {
             inputs.forEach(i => i.value = '');
         }
     }
+}
+
+function openEditKhataCardModal(card) {
+    document.getElementById('edit-custom-local-form').action = '/custom-cards/' + card.id;
+    document.getElementById('edit_local_card_title').value = card.title || '';
+    document.getElementById('edit_local_card_subtitle').value = card.subtitle || '';
+    document.getElementById('edit_local_card_badge').value = card.badge_text || '';
+    openModal('modal-edit-custom-local-card');
 }
 </script>
 @endpush

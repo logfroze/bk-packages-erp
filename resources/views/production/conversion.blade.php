@@ -88,6 +88,15 @@
                             <span class="material-symbols-outlined text-[15px]">summarize</span>
                             Conversion Slip
                         </a>
+                        @if(auth()->user()?->isFullAdmin() || auth()->user()?->isManager())
+                            <form action="{{ route('production.conversion.destroy', $run) }}" method="POST" onsubmit="return confirm('Delete conversion run {{ $run->run_code }} and restore consumed paper weights?');" class="inline">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 bg-white transition-colors" title="Delete Run & Restore Paper">
+                                    <span class="material-symbols-outlined text-[16px]">delete</span>
+                                </button>
+                            </form>
+                        @endif
                     </div>
                 </div>
 

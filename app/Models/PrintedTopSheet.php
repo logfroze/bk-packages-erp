@@ -12,12 +12,25 @@ class PrintedTopSheet extends Model
         'item_name',
         'carton_product_id',
         'supplier_id',
+        'supplier_name',
         'sourcing_city',
         'stock_pieces',
         'minimum_threshold',
         'unit_cost',
         'location',
+        'received_date',
         'notes',
+        'custom_fields',
+        'custom_grid',
+    ];
+
+    protected $casts = [
+        'received_date' => 'date',
+        'custom_fields' => 'array',
+        'custom_grid' => 'array',
+        'unit_cost' => 'decimal:2',
+        'stock_pieces' => 'integer',
+        'minimum_threshold' => 'integer',
     ];
 
     public function cartonProduct(): BelongsTo
@@ -28,5 +41,16 @@ class PrintedTopSheet extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Party::class, 'supplier_id');
+    }
+
+    public function getEffectiveSupplierNameAttribute(): string
+    {
+        if (!empty($this->supplier_name)) {
+            return $this->supplier_name;
+        }
+        if ($this->supplier) {
+            return $this->supplier->name;
+        }
+        return 'Custom Press';
     }
 }

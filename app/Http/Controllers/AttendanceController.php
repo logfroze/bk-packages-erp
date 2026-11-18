@@ -217,8 +217,8 @@ class AttendanceController extends Controller
             'wage_type' => $validated['wage_type'],
             'rate_amount' => $validated['rate_amount'],
             'phone' => $validated['phone'] ?? null,
-            'standard_hours_per_day' => $validated['standard_hours_per_day'] ?? 8.0,
-            'overtime_rate_per_hour' => $validated['overtime_rate_per_hour'] ?? null,
+            'standard_hours_per_day' => !empty($validated['standard_hours_per_day']) ? (float) $validated['standard_hours_per_day'] : 8.0,
+            'overtime_rate_per_hour' => !empty($validated['overtime_rate_per_hour']) ? (float) $validated['overtime_rate_per_hour'] : 0.0,
             'is_active' => true,
         ]);
 
@@ -244,8 +244,8 @@ class AttendanceController extends Controller
             'wage_type' => $validated['wage_type'],
             'rate_amount' => $validated['rate_amount'],
             'phone' => $validated['phone'] ?? null,
-            'standard_hours_per_day' => $validated['standard_hours_per_day'] ?? 8.0,
-            'overtime_rate_per_hour' => $validated['overtime_rate_per_hour'] ?? null,
+            'standard_hours_per_day' => !empty($validated['standard_hours_per_day']) ? (float) $validated['standard_hours_per_day'] : 8.0,
+            'overtime_rate_per_hour' => !empty($validated['overtime_rate_per_hour']) ? (float) $validated['overtime_rate_per_hour'] : 0.0,
             'is_active' => $request->has('is_active'),
         ]);
 
@@ -275,5 +275,19 @@ class AttendanceController extends Controller
     {
         $advance->update(['is_settled' => true]);
         return back()->with('success', "Advance of Rs. " . number_format($advance->amount) . " marked as settled.");
+    }
+
+    public function destroyWorker(Worker $worker): RedirectResponse
+    {
+        $name = $worker->full_name;
+        $worker->delete();
+        return back()->with('success', "Worker '{$name}' deleted successfully.");
+    }
+
+    public function destroyAdvance(WorkerAdvance $advance): RedirectResponse
+    {
+        $amount = $advance->amount;
+        $advance->delete();
+        return back()->with('success', "Worker advance record of Rs. " . number_format($amount) . " deleted.");
     }
 }

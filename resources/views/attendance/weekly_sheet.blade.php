@@ -122,10 +122,18 @@
                                 Rs. {{ number_format($row['net_payable'], 2) }}
                             </td>
                             <td class="py-3 px-4 text-center no-print">
-                                <button type="button" onclick="openWorkerEditModal({{ json_encode($w) }})"
-                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                                    Edit Worker
-                                </button>
+                                <div class="flex items-center justify-center gap-2">
+                                    <button type="button" onclick="openWorkerEditModal({{ json_encode($w) }})"
+                                        class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                        Edit
+                                    </button>
+                                    @if(auth()->user()?->isFullAdmin())
+                                        <button type="button" onclick="confirmDeleteWorker({{ $w->id }}, @js($w->full_name))"
+                                                class="text-xs text-red-500 hover:text-red-700 font-medium" title="Delete Worker">
+                                            Delete
+                                        </button>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -227,10 +235,26 @@
         </form>
     </div>
 </div>
+
+<!-- Standalone Worker Delete Form (Prevents HTML Form Nesting) -->
+<form id="standalone-delete-worker-form" method="POST" class="hidden">
+    @csrf
+    @method('DELETE')
+    <input type="hidden" name="worker_id" id="standalone-delete-worker-id" value="">
+</form>
 @endsection
 
 @push('scripts')
 <script>
+function confirmDeleteWorker(id, name) {
+    if (confirm('Delete worker "' + name + '" from factory payroll?')) {
+        const form = document.getElementById('standalone-delete-worker-form');
+        form.action = '/attendance/worker/' + id;
+        document.getElementById('standalone-delete-worker-id').value = id;
+        form.submit();
+    }
+}
+
 function openWorkerEditModal(worker) {
     document.getElementById('edit-worker-title').textContent = 'Edit Worker: ' + worker.full_name + ' (' + worker.worker_code + ')';
     document.getElementById('edit-worker-form').action = '/attendance/worker/' + worker.id + '/update';

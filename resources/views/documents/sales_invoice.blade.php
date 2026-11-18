@@ -57,9 +57,12 @@
                 Daily Roznamcha
             </a>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center flex-wrap gap-2">
             <button onclick="toggleEditPanel()" type="button" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold inline-flex items-center gap-1">
                 <span class="material-symbols-outlined text-[16px]">tune</span> Customize Bill
+            </button>
+            <button id="btn-bill-img" onclick="downloadBillImage()" type="button" class="px-3 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold inline-flex items-center gap-1 shadow-xs">
+                <span class="material-symbols-outlined text-[16px]">image</span> Download Image (PNG)
             </button>
             <button onclick="window.print()" type="button" class="px-4 py-1.5 rounded-lg bg-navy-900 bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 shadow-xs inline-flex items-center gap-1.5">
                 <span class="material-symbols-outlined text-[16px]">print</span> Print Bill / Receipt
@@ -228,7 +231,34 @@
 
     </div>
 
+    <script src="{{ asset('js/html2canvas.min.js') }}"></script>
     <script>
+    async function downloadBillImage() {
+        const btn = document.getElementById('btn-bill-img');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = 'Rendering...';
+        btn.disabled = true;
+
+        try {
+            const card = document.querySelector('.bill-container');
+            const canvas = await html2canvas(card, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+            const link = document.createElement('a');
+            link.download = 'Invoice_Bill_{{ $invoiceNo }}.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (e) {
+            console.error('Image capture error:', e);
+            alert('Could not render image. Please use Print Bill.');
+        } finally {
+            btn.innerHTML = origHtml;
+            btn.disabled = false;
+        }
+    }
+
     function toggleEditPanel() {
         const el = document.getElementById('edit-panel');
         el.classList.toggle('hidden');

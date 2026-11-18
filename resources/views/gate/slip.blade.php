@@ -13,19 +13,23 @@
     </style>
 </head>
 <body class="bg-slate-100 py-8 px-4 font-sans text-slate-900">
-    <div class="max-w-lg mx-auto bg-white border border-slate-300 rounded-xl p-8 shadow-sm">
+    <div id="gate-slip-card" class="max-w-lg mx-auto bg-white border border-slate-300 rounded-xl p-8 shadow-sm">
         <!-- Print Controls -->
-        <div class="flex items-center justify-between gap-3 pb-6 mb-6 border-b border-slate-200 no-print">
+        <div class="flex items-center justify-between flex-wrap gap-2 pb-6 mb-6 border-b border-slate-200 no-print">
             <a href="{{ route('gate.index') }}" class="text-sm font-medium text-slate-600 hover:text-slate-900">← Back to Gate</a>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center flex-wrap gap-2">
                 @php
                     $waText = urlencode("*BK PACKAGES - GATE PASS ({$gate->gate_pass_number})*\nParty: " . ($gate->party->name ?? '') . "\nVehicle: {$gate->vehicle_number} ({$gate->driver_name})\nItem: {$gate->material_summary}\nQty: " . number_format($gate->total_pieces ?? 0) . " Pcs\nNet Weight: " . number_format($gate->net_weight_kg ?? 0) . " kg\nTime: {$gate->time_in->format('d-M-Y h:i A')}");
                 @endphp
+                <button id="btn-gate-img" onclick="downloadGateSlipImage()" type="button"
+                   class="px-3 py-2 rounded-lg bg-indigo-700 text-white text-xs font-semibold hover:bg-indigo-800 transition-colors">
+                    Download Image (PNG)
+                </button>
                 <a href="https://wa.me/?text={{ $waText }}" target="_blank"
-                   class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700">
-                    Share on WhatsApp
+                   class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors">
+                    Share WhatsApp
                 </a>
-                <button onclick="window.print()" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">
+                <button onclick="window.print()" class="px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors">
                     Print Slip
                 </button>
             </div>
@@ -101,6 +105,36 @@
             <div class="border-t border-slate-400 pt-2">Security Gate Officer</div>
         </div>
     </div>
+
+    <script src="{{ asset('js/html2canvas.min.js') }}"></script>
+    <script>
+    async function downloadGateSlipImage() {
+        const btn = document.getElementById('btn-gate-img');
+        const origText = btn.innerHTML;
+        btn.innerHTML = 'Rendering...';
+        btn.disabled = true;
+
+        try {
+            const card = document.getElementById('gate-slip-card');
+            const canvas = await html2canvas(card, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                ignoreElements: (el) => el.classList.contains('no-print')
+            });
+            const link = document.createElement('a');
+            link.download = 'BK_GatePass_{{ $gate->gate_pass_number }}.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (e) {
+            console.error('Image capture error:', e);
+            alert('Could not render image. Please use Print Slip.');
+        } finally {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+        }
+    }
+    </script>
 </body>
 </html>
 

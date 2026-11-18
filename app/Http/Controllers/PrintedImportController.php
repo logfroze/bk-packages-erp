@@ -21,7 +21,7 @@ class PrintedImportController extends Controller
             $query->where('sourcing_city', $cityFilter);
         }
 
-        $topSheets = $query->orderBy('item_name')->paginate(25);
+        $topSheets = $query->orderByDesc('id')->paginate(25);
 
         // Summary Metrics
         $totalPiecesStock = PrintedTopSheet::sum('stock_pieces');
@@ -35,18 +35,32 @@ class PrintedImportController extends Controller
             'Lahore',
             'Rahim Yar Khan',
             'Jumber',
+            'Okara',
+            'Karachi',
         ];
 
         $cartonProducts = CartonProduct::with('client')->orderBy('box_title')->get();
-        $suppliers = Party::whereIn('classification', ['CORPORATE_CLIENT', 'LOCAL_VENDOR_SHOP'])
-            ->orWhere('type', 'SUPPLIER')
-            ->orderBy('name')
-            ->get();
-        $buyers = Party::where('type', 'CUSTOMER')->orderBy('name')->get();
-
         $customCards = CustomErpCard::forPage('printed_imports');
 
-        $nextCode = 'PTS-'.str_pad((string) (PrintedTopSheet::count() + 1), 4, '0', STR_PAD_LEFT);
+        // Known printing presses & autocomplete suggestions
+        $existingPresses = PrintedTopSheet::whereNotNull('supplier_name')
+            ->where('supplier_name', '!=', '')
+            ->distinct()
+            ->pluck('supplier_name')
+            ->toArray();
+
+        $defaultPresses = [
+            'Unicorn Printing Press (Faisalabad)',
+            'Crown Packages & Press (Lahore)',
+            'Al-Rehman Art Press (Multan)',
+            'Classic Offset Printers (Faisalabad)',
+            'Flying Paper & Board Mills',
+            'Century Paper & Board Mills',
+        ];
+
+        $pressSuggestions = array_values(array_unique(array_merge($defaultPresses, $existingPresses)));
+
+        $nextCode = 'PTS-' . str_pad((string) (PrintedTopSheet::max('id') + 1), 4, '0', STR_PAD_LEFT);
 
         return view('production.printed_imports', compact(
             'topSheets',
@@ -57,9 +71,8 @@ class PrintedImportController extends Controller
             'sourcingCities',
             'cityFilter',
             'cartonProducts',
-            'suppliers',
-            'buyers',
             'customCards',
+            'pressSuggestions',
             'nextCode'
         ));
     }
@@ -70,33 +83,81 @@ class PrintedImportController extends Controller
             'item_code' => 'required|string|max:50|unique:printed_top_sheets,item_code',
             'item_name' => 'required|string|max:200',
             'carton_product_id' => 'nullable|exists:carton_products,id',
-            'supplier_id' => 'nullable|exists:parties,id',
+            'supplier_name' => 'nullable|string|max:150',
             'sourcing_city' => 'required|string|max:100',
             'stock_pieces' => 'required|integer|min:0',
             'minimum_threshold' => 'required|integer|min:0',
             'unit_cost' => 'required|numeric|min:0',
             'location' => 'nullable|string|max:100',
+            'received_date' => 'nullable|date',
             'notes' => 'nullable|string',
             'custom_fields' => 'nullable|array',
             'custom_grid' => 'nullable|array',
         ]);
 
+        $supplierName = trim($validated['supplier_name'] ?? '');
+        if (empty($supplierName)) {
+            $supplierName = 'Unicorn Printing Press (' . $validated['sourcing_city'] . ')';
+        }
+
         PrintedTopSheet::create([
             'item_code' => strtoupper(trim($validated['item_code'])),
             'item_name' => trim($validated['item_name']),
             'carton_product_id' => $validated['carton_product_id'] ?? null,
-            'supplier_id' => $validated['supplier_id'] ?? null,
+            'supplier_name' => $supplierName,
             'sourcing_city' => trim($validated['sourcing_city']),
             'stock_pieces' => (int) $validated['stock_pieces'],
             'minimum_threshold' => (int) $validated['minimum_threshold'],
             'unit_cost' => (float) $validated['unit_cost'],
-            'location' => $validated['location'] ? trim($validated['location']) : 'Top Sheet Bay 1',
+            'location' => !empty($validated['location']) ? trim($validated['location']) : 'Top Sheet Bay 1',
+            'received_date' => !empty($validated['received_date']) ? $validated['received_date'] : now()->toDateString(),
             'notes' => $validated['notes'] ?? null,
             'custom_fields' => $validated['custom_fields'] ?? null,
             'custom_grid' => $validated['custom_grid'] ?? null,
         ]);
 
-        return redirect()->route('production.printed_imports')->with('success', "Pre-Printed Top Sheet [{$validated['item_code']}] added successfully ({$validated['stock_pieces']} pcs from {$validated['sourcing_city']}).");
+        return redirect()->route('production.printed_imports')
+            ->with('success', "Pre-Printed Top Sheet [{$validated['item_code']}] added successfully ({$validated['stock_pieces']} pcs from {$supplierName}).");
+    }
+
+    public function update(Request $request, int $id): RedirectResponse
+    {
+        $sheet = PrintedTopSheet::findOrFail($id);
+
+        $validated = $request->validate([
+            'item_code' => 'required|string|max:50|unique:printed_top_sheets,item_code,' . $sheet->id,
+            'item_name' => 'required|string|max:200',
+            'carton_product_id' => 'nullable|exists:carton_products,id',
+            'supplier_name' => 'nullable|string|max:150',
+            'sourcing_city' => 'required|string|max:100',
+            'stock_pieces' => 'required|integer|min:0',
+            'minimum_threshold' => 'required|integer|min:0',
+            'unit_cost' => 'required|numeric|min:0',
+            'location' => 'nullable|string|max:100',
+            'received_date' => 'nullable|date',
+            'notes' => 'nullable|string',
+            'custom_fields' => 'nullable|array',
+            'custom_grid' => 'nullable|array',
+        ]);
+
+        $sheet->update([
+            'item_code' => strtoupper(trim($validated['item_code'])),
+            'item_name' => trim($validated['item_name']),
+            'carton_product_id' => $validated['carton_product_id'] ?? null,
+            'supplier_name' => !empty($validated['supplier_name']) ? trim($validated['supplier_name']) : $sheet->supplier_name,
+            'sourcing_city' => trim($validated['sourcing_city']),
+            'stock_pieces' => (int) $validated['stock_pieces'],
+            'minimum_threshold' => (int) $validated['minimum_threshold'],
+            'unit_cost' => (float) $validated['unit_cost'],
+            'location' => !empty($validated['location']) ? trim($validated['location']) : 'Top Sheet Bay 1',
+            'received_date' => !empty($validated['received_date']) ? $validated['received_date'] : ($sheet->received_date ?? now()->toDateString()),
+            'notes' => $validated['notes'] ?? null,
+            'custom_fields' => $validated['custom_fields'] ?? $sheet->custom_fields,
+            'custom_grid' => $validated['custom_grid'] ?? $sheet->custom_grid,
+        ]);
+
+        return redirect()->route('production.printed_imports')
+            ->with('success', "Pre-Printed Top Sheet [{$sheet->item_code}] updated successfully.");
     }
 
     public function adjustStock(Request $request, int $id): RedirectResponse
@@ -119,7 +180,8 @@ class PrintedImportController extends Controller
             $sheet->update(['stock_pieces' => $qty]);
         }
 
-        return redirect()->route('production.printed_imports')->with('success', "Stock for {$sheet->item_name} adjusted from {$oldQty} to {$sheet->fresh()->stock_pieces} pcs.");
+        return redirect()->route('production.printed_imports')
+            ->with('success', "Stock for {$sheet->item_name} adjusted from {$oldQty} to {$sheet->fresh()->stock_pieces} pcs.");
     }
 
     public function destroy(int $id): RedirectResponse
@@ -128,6 +190,7 @@ class PrintedImportController extends Controller
         $name = $sheet->item_name;
         $sheet->delete();
 
-        return redirect()->route('production.printed_imports')->with('success', "Top Sheet [{$name}] removed successfully.");
+        return redirect()->route('production.printed_imports')
+            ->with('success', "Top Sheet [{$name}] removed successfully.");
     }
 }
