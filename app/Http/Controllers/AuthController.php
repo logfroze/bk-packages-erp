@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 class AuthController extends Controller
@@ -73,12 +74,20 @@ class AuthController extends Controller
             // User already has a PIN configured: unlock and enter
             session(['pin_unlocked' => true]);
 
+            Log::info('Security: User authenticated via password', ['email' => $user->email, 'ip' => $request->ip()]);
+
             if ($user->role === 'GATE_OPERATOR') {
                 return redirect()->intended(route('gate.index'));
             }
 
             return redirect()->intended(route('dashboard'));
         }
+
+        Log::warning('Security: Failed password login attempt', [
+            'email' => $credentials['email'] ?? 'unknown',
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return back()
             ->withErrors(['email' => 'Invalid email or password. Please re-check credentials.'])
@@ -109,6 +118,11 @@ class AuthController extends Controller
         }
 
         if (! $user->verifyPin($validated['pin'])) {
+            Log::warning('Security: Failed 4-digit PIN attempt', [
+                'email' => $user->email,
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
             return back()->withErrors(['pin' => 'Incorrect 4-digit PIN code. Please try again.']);
         }
 
@@ -119,6 +133,8 @@ class AuthController extends Controller
 
         $user->last_login_at = now();
         $user->save();
+
+        Log::info('Security: User unlocked session via 4-digit PIN', ['email' => $user->email, 'ip' => $request->ip()]);
 
         Cookie::queue('bk_device_pin_email', $user->email, 5256000);
 

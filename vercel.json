@@ -21,6 +21,10 @@
       "dest": "/public/$1"
     },
     {
+      "src": "/(\\.env.*|\\.git.*|\\.htaccess|composer\\..*|package\\..*|.*\\.sql)",
+      "dest": "/api/index.php"
+    },
+    {
       "src": "/(.*)",
       "dest": "/api/index.php"
     }

@@ -679,6 +679,9 @@
             }
             updateChatBadges();
             setInterval(updateChatBadges, 30000);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) updateChatBadges();
+            });
         })();
 
         // PWA Offline Service Worker Registration

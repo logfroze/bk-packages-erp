@@ -67,7 +67,14 @@
 5. **Database & Query Performance**:
    - Consolidated 15+ sequential queries into unified `selectRaw` calls.
    - Neon PostgreSQL pooler `ATTR_EMULATE_PREPARES` permanent fix.
-6. **Customizable Pre-Printed Sheets & Petty Cash Edit/Fix (Nov 18, 2026)**:
+6. **Pre-Launch Security Audit Controls (Nov 18, 2026 — OWASP 2025 & LLM Top 10)**:
+   - **4-Digit PIN & Login Throttling (Checks 2.4 & 6.1)**: Applied `throttle:5,1` on `POST /login` and `POST /login/pin` to protect against automated PIN & credential brute-force attacks.
+   - **Chat Upload Hardening (Check 5.3)**: Added strict server-side MIME whitelist (`jpg, jpeg, png, webp, gif, mp3, wav, ogg, webm, m4a, aac, pdf, doc, docx, xls, xlsx, txt, csv`) and blocked dangerous extensions (SVG, HTML, PHP, EXE) to prevent Stored XSS and execution.
+   - **Enterprise Security Headers (Check 10.1)**: Implemented global `SecurityHeaders` middleware setting `nosniff`, `SAMEORIGIN` clickjacking defense, `strict-origin-when-cross-origin`, and `Permissions-Policy`.
+   - **AI Copilot Rate Limiting (Checks 8.1 & 8.2)**: Applied `throttle:15,1` on `/ai-copilot/chat` and `/ai-copilot/execute` to prevent Gemini API quota exhaustion.
+   - **Inactive Polling Pause (Check 11.1)**: Added `if (document.hidden) return;` and visibility change hooks to pause real-time chat and badge polling when browser tabs are minimized or inactive.
+   - **Security Event Logging (Check 10.5)**: Added structured `Log::warning(...)` events recording failed password logins and incorrect PIN attempts with IP addresses.
+   - **Sensitive File Probing Defense (Check 10.4)**: Explicitly routed and blocked probes for `/.env`, `/.git`, and `.sql` dumps with immediate 404 aborts in `routes/web.php` and `vercel.json`.
    - **Pre-Printed Top Sheets (`/production/printed-imports`)**:
      - Converted Supplier/Press from client party dropdown to **customizable free-text + datalist autocomplete** (e.g. *Unicorn Printing Press, Faisalabad*).
      - Added **Arrival Date (`received_date`)** in Add & Edit modals and added visible **Date & Supplier columns** in the main data table.

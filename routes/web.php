@@ -21,11 +21,16 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingController;
 use Illuminate\Support\Facades\Route;
 
-// Public Authentication Routes
+// Block direct probing of sensitive files (OWASP 2025 Check 10.4)
+Route::match(['get', 'post', 'head'], '/{file}', function () {
+    abort(404);
+})->where('file', '.*(\.env|\.git|\.htaccess|composer\.(json|lock)|package\.(json|lock)|\.sql).*');
+
+// Public Authentication Routes (Guarded with Rate Limiting: OWASP 2025 Checks 2.4 & 6.1)
 Route::get('/ping', fn() => 'pong');
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
-Route::post('/login/pin', [AuthController::class, 'loginWithPin'])->name('login.pin');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login.submit');
+Route::post('/login/pin', [AuthController::class, 'loginWithPin'])->middleware('throttle:5,1')->name('login.pin');
 Route::post('/switch-account', [AuthController::class, 'switchAccount'])->name('account.switch');
 
 // Authenticated ERP Routes
@@ -65,8 +70,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/ai-copilot/conversations/{conversation}', [AiCopilotController::class, 'showConversation'])->name('ai.conversations.show');
     Route::delete('/ai-copilot/conversations/{conversation}', [AiCopilotController::class, 'destroyConversation'])->name('ai.conversations.destroy');
     Route::post('/ai-copilot/messages/{message}/dismiss', [AiCopilotController::class, 'dismissAction'])->name('ai.messages.dismiss');
-    Route::post('/ai-copilot/chat', [AiCopilotController::class, 'chat'])->name('ai.chat');
-    Route::post('/ai-copilot/execute', [AiCopilotController::class, 'execute'])->name('ai.execute');
+    Route::post('/ai-copilot/chat', [AiCopilotController::class, 'chat'])->middleware('throttle:15,1')->name('ai.chat');
+    Route::post('/ai-copilot/execute', [AiCopilotController::class, 'execute'])->middleware('throttle:15,1')->name('ai.execute');
 
     // Operations & Finance (Mirza Sohail Full Admin, Manager, and Owner View)
     Route::middleware('role:ADMIN,ACCOUNTANT,MANAGER,OWNER')->group(function () {

@@ -349,7 +349,7 @@ class ChatController extends Controller
             'active_type' => 'required|in:group,user',
             'receiver_id' => 'nullable|exists:users,id',
             'message_text' => 'nullable|string|max:5000',
-            'attachment' => 'nullable|file|max:25600', // max 25MB
+            'attachment' => 'nullable|file|max:25600|mimes:jpg,jpeg,png,webp,gif,mp3,wav,ogg,webm,m4a,aac,pdf,doc,docx,xls,xlsx,txt,csv', // OWASP Check 5.3: Whitelist only safe media/docs
         ]);
 
         if (empty(trim($validated['message_text'] ?? '')) && ! $request->hasFile('attachment')) {
@@ -366,13 +366,18 @@ class ChatController extends Controller
 
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
-            $attachmentName = $file->getClientOriginalName();
+            $ext = strtolower($file->getClientOriginalExtension());
+            $dangerousExtensions = ['svg', 'html', 'htm', 'php', 'phtml', 'exe', 'bat', 'sh', 'js', 'py', 'jar', 'vbs', 'phar'];
+            if (in_array($ext, $dangerousExtensions, true)) {
+                return response()->json(['error' => "File extension '.{$ext}' is restricted for security (OWASP Check 5.3)."], 422);
+            }
+
+            $attachmentName = strip_tags($file->getClientOriginalName());
             $attachmentMime = $file->getClientMimeType() ?: $file->getMimeType();
             $attachmentSize = $file->getSize();
-            $ext = strtolower($file->getClientOriginalExtension());
 
-            // Detect attachment category
-            if (str_starts_with($attachmentMime, 'image/') || in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'])) {
+            // Detect attachment category (SVGs are excluded to prevent Stored XSS)
+            if (str_starts_with($attachmentMime, 'image/') || in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
                 $attachmentType = 'image';
             } elseif (str_starts_with($attachmentMime, 'audio/') || in_array($ext, ['mp3', 'wav', 'ogg', 'webm', 'm4a', 'aac'])) {
                 $attachmentType = 'audio';

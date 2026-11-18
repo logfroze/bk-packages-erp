@@ -1401,10 +1401,10 @@
     }
 
     // ========================================================
-    // REAL-TIME POLLING ENGINE (Live Sync Every 3s)
+    // REAL-TIME POLLING ENGINE (Live Sync Every 3s, Paused When Tab Inactive: OWASP Check 11.1)
     // ========================================================
     function pollNewMessages() {
-        if (isPolling) return;
+        if (isPolling || document.hidden) return;
         isPolling = true;
 
         const url = `{{ route('chat.messages') }}?type=${currentActiveType}&receiver_id=${currentReceiverId}&after_id=${lastMessageId}&last_sync=${encodeURIComponent(lastSyncTime)}`;
@@ -1453,5 +1453,8 @@
     }
 
     setInterval(pollNewMessages, 3000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) pollNewMessages();
+    });
 </script>
 @endpush
